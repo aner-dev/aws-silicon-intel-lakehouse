@@ -1,7 +1,10 @@
-# --- Python & uv ---
-.venv/
+# Python / Virtual Envs
 __pycache__/
 *.py[cod]
+*$py.class
+.venv/
+venv/
+.env
 .uv/
 
 # --- Astro / Airflow ---

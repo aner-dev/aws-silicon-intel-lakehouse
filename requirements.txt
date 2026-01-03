@@ -1,0 +1,5 @@
+dlt[s3]
+pyspark==3.5.0
+apache-airflow-providers-apache-spark
+apache-airflow-providers-amazon
+python-dotenv

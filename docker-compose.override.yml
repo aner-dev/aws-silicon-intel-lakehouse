@@ -1,0 +1,34 @@
+# docker-compose.override.yml
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack_lakehouse
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=secrets,IAM,s3,glue,lambda,
+    networks:
+      - airflow
+
+  spark-master:
+    image: bitnami/spark:3.5
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    networks:
+      - airflow
+
+  spark-worker:
+    image: bitnami/spark:3.5
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    networks:
+      - airflow
