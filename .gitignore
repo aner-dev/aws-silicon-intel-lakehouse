@@ -22,3 +22,4 @@ include/
 # --- LocalStack & Data ---
 data/localstack/
 .env
+build_final_attempt.log
