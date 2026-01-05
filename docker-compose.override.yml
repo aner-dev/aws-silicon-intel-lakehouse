@@ -1,30 +1,42 @@
-# docker-compose.override.yml
+version: "3.1"
 
 services:
   localstack:
-    image: localstack/localstack:latest
+    image: docker.io/localstack/localstack:latest
     container_name: localstack_lakehouse
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=secrets,IAM,s3,glue,lambda,
+      - SERVICES=s3,glue,iam
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      # El :ro (read-only) es buena práctica para sockets en Podman
+      - "${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro"
+    networks:
+      - airflow
 
   spark-master:
-    image: docker.io/bitnami/spark:3.5.0
+    image: docker.io/apache/spark:3.5.0
     container_name: spark-master
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
     ports:
-      - "8080:8080"
-      - "7077:7077"
+      - "8081:8081" # Web UI
+      - "7077:7077" # Master Port
+    networks:
+      - airflow
 
   spark-worker:
-    image: docker.io/bitnami/spark:3.5
+    image: docker.io/apache/spark:3.5.0
     container_name: spark-worker
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
     depends_on:
       - spark-master
+    networks:
+      - airflow
