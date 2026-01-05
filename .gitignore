@@ -24,3 +24,4 @@ data/localstack/
 .env
 build_final_attempt.log
 docs/prompts.md
+docs/prompt_code.md
