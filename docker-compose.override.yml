@@ -7,7 +7,7 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=s3,iam,secrets
+      - SERVICES=s3,iam,secretsmanager
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
