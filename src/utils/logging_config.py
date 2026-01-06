@@ -4,7 +4,7 @@ import sys
 import structlog
 
 
-def configure_logger():
+def setup_logging():
     # 1. Config standard logging as it redirect to structlog
     logging.basicConfig(
         format="%(message)s",

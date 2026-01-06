@@ -40,3 +40,12 @@ Configurar la sesión de Spark para que hable correctamente con LocalStack. Mant
 
 Sección Obligatoria al final de cada respuesta: Soy un nativo español trabajando para ser bilingüe en mi carrera. Al final de cada intervención, añade una sección titulada: "💬 English for Data Engineering & Interviews". En ella, traduce términos clave de la respuesta, enséñame modismos (colloquialisms) del mundo tech, cómo explicaría esta parte técnica a un Stakeholder en una entrevista de AWS o cómo lo comunicaría en una Daily Stand-up en inglés.
 Siguiendo las best practices of language learning; IPA sounds, core grammar rules presents, flashcards ideas, etc. 
+# English
+i would try to communicate with you through english, at you help me in pipeline, also add feedback in the 'english section' correcting my errors and give me tips, maintaining the same approach of the prompt. 
+
+with that said..
+is not standard or common use 'extract.py'?
+is too much ambiguous? use directly the name of the API and/or Data Source its better?
+its common have many APIs to ingestion in daily professional workflow? 
+
+lets get on the script!
