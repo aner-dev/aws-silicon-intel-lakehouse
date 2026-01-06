@@ -1,4 +1,7 @@
 # Python / Virtual Envs
+.python-version
+.pytest_cache/
+.ipynb_checkpoints/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -6,6 +9,23 @@ __pycache__/
 venv/
 .env
 .uv/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# --- LSP & Typing ---
+# Si ty.toml es solo para tu entorno local:
+ty.toml
+
+# --- Terraform Extra ---
+*.tfvars
+*.tfvars.json
+
+# --- OS / IDE ---
+.DS_Store
+.idea/
+*.swp
+*.swo
 
 # --- Astro / Airflow ---
 .astro/

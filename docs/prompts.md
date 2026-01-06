@@ -1,5 +1,5 @@
 # prompt
-Contexto del Proyecto: Estamos desarrollando un Portfolio de Data Engineering de nivel Junior/mid llamado aws-silicon-intel-lakehouse. El objetivo es demostrar habilidades de arquitectura Cloud-Native, manejo de volúmenes de datos y mejores prácticas de ingeniería de datos.
+Contexto del Proyecto: Estamos desarrollando un Portfolio de Data Engineering de nivel Junior llamado aws-silicon-intel-lakehouse. El objetivo es demostrar habilidades de arquitectura Cloud-Native, manejo de volúmenes de datos y mejores prácticas de ingeniería de datos.
 Es mi 2do proyecto de data engineering, te pasare el README.md del 1er proyecto terminado, no soy novato! pero quiero profundizar en aws environment y terraform, como los otros tools y tech stack mencionados.
 
 Especificaciones Técnicas:

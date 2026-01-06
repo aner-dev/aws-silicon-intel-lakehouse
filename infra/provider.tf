@@ -1,16 +1,25 @@
-provider "aws" {
-  region     = "us-east-1"
-  access_key = "test"
-  secret_key = "test"
+terraform {
+  required_version = ">= 1.2.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
 
-  # Estas banderas son vitales para engañar a Terraform y que no busque AWS real
+provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "test"
+  secret_key                  = "test"
   skip_credentials_validation = true
   skip_metadata_api_check     = true
   skip_requesting_account_id  = true
-  s3_use_path_style           = true # LocalStack usa path-style (s3://bucket/obj)
+  s3_use_path_style           = true # LocalStack use path-style (s3://bucket/obj)
 
   endpoints {
-    s3    = "http://localhost:4566"
-    glue  = "http://localhost:4566"
+    s3             = "http://localhost:4566"
+    iam            = "http://localhost:4566"
+    secretsmanager = "http://localhost:4566"
   }
 }
