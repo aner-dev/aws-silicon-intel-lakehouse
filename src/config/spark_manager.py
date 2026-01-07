@@ -1,5 +1,9 @@
 from pyspark.sql import SparkSession
-from src.logging_config import log
+from utils.logging_config import log
+
+import structlog
+
+log = structlog.get_logger()
 
 log.info("spark_session_started", app_id="silicon-intel-01", layer="bronze")
 
