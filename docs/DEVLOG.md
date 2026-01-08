@@ -28,3 +28,8 @@ Applied **Explicit Configuration Overrides** in the `SparkSession` builder.
 Modern Spark/Hadoop (Newer): It is becoming very common to use "Human Readable" strings like 24h, 10m, or 500ms. This is called **ISO-8601 Duration format**
 Legacy Spark/Hadoop (Older): The older systems strictly require Integers (Longs). They usually assume a specific unit (e.g., "this field is always in milliseconds").
 
+# Data Quality Checks through Great Expectations
+Data Validation as a first-class citizen: 
+I treat data validation as a first-class citizen by embedding Great Expectations directly into my CI/CD pipeline. 
+If the data doesn't meet the quality standards, the pipeline is blocked from progressing to the Gold layer.
+Use of **automated assertions** to ensure schema consistency across all environments.
