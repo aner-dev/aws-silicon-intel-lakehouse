@@ -1,0 +1,86 @@
+name: Pipeline CI (Lint + Unit + Integration)
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # JOB 1: Fast Quality Gate
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: uv-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Static Analysis (Ruff)
+        run: uv run ruff check .
+
+      - name: Unit Tests (Pytest)
+        run: uv run pytest tests/test_silver_transform.py
+
+  # JOB 2: Heavy Integration (Only if JOB 1 passes)
+  integration-test:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localhost:4566
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. Infrastructure Mocking
+      - name: Start LocalStack
+        run: |
+          docker run -d --name localstack -p 4566:4566 -p 4510-4559:4510-4559 localstack/localstack
+          echo "Waiting for LocalStack S3..."
+          timeout 60s bash -c "until curl -s localhost:4566/_localstack/health | grep '\"s3\": \"available\"'; do sleep 2; done"
+
+      # 2. Tooling Setup (UV & Terraform)
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.3"
+          terraform_wrapper: false
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      # 3. Deploy Local Infrastructure
+      - name: Terraform Apply
+        working-directory: ./infra
+        run: |
+          terraform init
+          terraform apply -auto-approve
+        env:
+          TF_VAR_news_api_key: ${{ secrets.NEWS_API_KEY }}
+
+      # 4. Full Data Flow Run (The Medallion Journey)
+      - name: Execute Medallion Pipeline
+        run: |
+          echo "--- EXTRACT (Bronze) ---"
+          uv run src/extract/bronze_ingestion_news_api.py
+
+          echo "--- TRANSFORM (Silver) ---"
+          uv run src/transform/silver_transform_pyspark_news_api.py
+
+          echo "--- QUALITY CHECK ---"
+          uv run src/quality/validate_silver.py
