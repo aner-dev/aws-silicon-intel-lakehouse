@@ -8,7 +8,8 @@ def run_quality_checks():
 
     # 1. Load the Silver table (Iceberg)
     # Adjusted to your table name in LocalStack
-    df = spark.read.table("demo.silicon_intel.news_silver")
+    df = spark.read.table("local.silver.news_articles")
+    print(f"DEBUG: Silver row count = {df.count()}")
 
     # 2. Configure GX
     context = gx.get_context()
