@@ -42,16 +42,16 @@ jobs:
           terraform apply -auto-approve
         env:
           # Esto llena la variable 'news_api_key' del .tf automáticamente
-          TF_VAR_news_api_key: "dummy_key_for_testing"
-          # Credenciales para LocalStack
+          TF_VAR_news_api_key: ${{ secrets.NEWS_API_KEY }}
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           AWS_DEFAULT_REGION: us-east-1
       # 4. Mock Data (The step you missed today)
-      - name: Seed Bronze Layer
-        run: |
-          aws --endpoint-url=http://localhost:4566 s3 cp \
-          tests/fixtures/sample_news.json s3://silicon-intel-bronze/news_data_raw.json
+      # 4. Ingest real data (o al menos intentarlo con la dummy_key)
+      - name: Ingest Bronze Data
+        run: uv run src/extract/bronze_ingestion_news_api.py
+        env:
+          AWS_ENDPOINT_URL: http://localhost:4566
 
       # 5. Run Transformation
       - name: Run Silver Transformation
