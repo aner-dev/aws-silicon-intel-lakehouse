@@ -56,3 +56,6 @@ jobs:
       # 5. Run Transformation
       - name: Run Silver Transformation
         run: uv run src/transform/silver_transform_pyspark_news_api.py
+
+      - name: Data Quality Check (Great Expectations)
+        run: uv run src/quality/validate_silver.py
