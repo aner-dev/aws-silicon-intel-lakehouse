@@ -1,0 +1,48 @@
+name: Data Pipeline Integration Test
+
+on: [push, pull_request]
+
+jobs:
+  spark-test:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localhost:4566 # Algunos SDKs lo leen de aquí
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. Start LocalStack
+      - name: Start LocalStack
+        uses: localstack/setup-localstack@v0.2.0
+        with:
+          image-tag: latest
+
+      # 2. Setup Python and UV
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install Dependencies
+        run: uv sync
+
+      # 3. Spin up Infrastructure with Terraform
+      - name: Terraform Apply
+        working-directory: ./infra
+        run: |
+          terraform init
+          terraform apply -auto-approve
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+
+      # 4. Mock Data (The step you missed today)
+      - name: Seed Bronze Layer
+        run: |
+          aws --endpoint-url=http://localhost:4566 s3 cp \
+          tests/fixtures/sample_news.json s3://silicon-intel-bronze/news_data_raw.json
+
+      # 5. Run Transformation
+      - name: Run Silver Transformation
+        run: uv run src/transform/silver_transform_pyspark_news_api.py

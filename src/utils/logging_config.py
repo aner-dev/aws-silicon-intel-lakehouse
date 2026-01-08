@@ -12,20 +12,24 @@ def setup_logging():
         level=logging.INFO,
     )
 
+    is_tty = sys.stdout.isatty()
+
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
+            structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,  # Better for large traces
             structlog.processors.TimeStamper(fmt="iso", utc=True),  # Standard ISO
-            structlog.processors.JSONRenderer(),
+            structlog.dev.ConsoleRenderer(colors=True)
+            if is_tty
+            else structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
         context_class=dict,
-        logger_factory=structlog.BytesLoggerFactory()
-        if sys.stdout.isatty() is False
-        else structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=True,  # RELEVANT for performance
+        # Factory choice: Print is more secure for interoperability with 'tee'
+        logger_factory=structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use=True,
     )
 
 

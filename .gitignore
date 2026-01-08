@@ -47,3 +47,7 @@ docs/prompts.md
 docs/prompt_code.md
 *.tfvars
 *.egg-info/
+.envrc
+debug.log
+core-site.xml
+.pivotal/
