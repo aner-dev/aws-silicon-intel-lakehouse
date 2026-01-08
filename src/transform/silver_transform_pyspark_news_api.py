@@ -1,3 +1,6 @@
+# silver_transform_pyspark_news_api.py
+import os
+from datetime import datetime
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
     StructType,
@@ -7,13 +10,12 @@ from pyspark.sql.types import (
     TimestampType,
 )
 from pyspark.sql.utils import AnalysisException
+import boto3
+
 from config.spark_base import SparkSessionFactory
 from utils.logging_config import log
-import boto3
-import os
 
-# 1. Explicit definition (Schema Enforcement)
-# This guarantees that Spark doesn't have to infer the schema.
+# 1. Schema Enforcement definition
 NEWS_SCHEMA = StructType(
     [
         StructField(
@@ -39,7 +41,7 @@ NEWS_SCHEMA = StructType(
 
 
 def check_s3_files(bucket, prefix):
-    """Pro Check: Pre-validation without Spark"""
+    """Pre-validation without Spark to save resources."""
     s3 = boto3.client(
         "s3", endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
     )
@@ -47,89 +49,85 @@ def check_s3_files(bucket, prefix):
     return "Contents" in response
 
 
+def transform_articles(df):
+    """
+    BUSINESS LOGIC ONLY.
+    Input: raw_df -> Output: transformed_df
+    """
+    return (
+        df.select(F.explode("articles").alias("article"))
+        .select(
+            F.col("article.source.name").alias("source_name"),
+            F.col("article.author"),
+            F.col("article.title").alias("title"),
+            F.col("article.url").alias("url"),
+            F.col("article.publishedAt").cast(TimestampType()).alias("published_at"),
+            F.to_date("article.publishedAt").alias("event_date"),
+            F.col("article.content"),
+        )
+        .withColumn("processed_at", F.current_timestamp())
+        .filter("title IS NOT NULL AND title != '[Removed]'")
+        .dropDuplicates(["title", "published_at"])
+    )
+
+
+def upsert_to_iceberg(spark, df, table_name, partition_col="event_date"):
+    """Handles the Iceberg-specific MERGE logic."""
+    if not spark.catalog.tableExists(table_name):
+        log.info("creating_new_iceberg_table", table=table_name)
+        df.writeTo(table_name).partitionedBy(partition_col).create()
+    else:
+        log.info("performing_iceberg_merge", table=table_name)
+        df.createOrReplaceTempView("source_data")
+        spark.sql(f"""
+            MERGE INTO {table_name} t
+            USING source_data s
+            ON t.title = s.title AND t.published_at = s.published_at
+            WHEN MATCHED THEN 
+                UPDATE SET *
+            WHEN NOT MATCHED THEN 
+                INSERT *
+        """)
+
+
 def transform_bronze_to_silver():
-    # Pre-Spark Check
+    """Orchestration Function (The Entry Point)"""
     bucket = "silicon-intel-bronze"
+    table_name = "local.silver.news_articles"
+
+    # 1. Infrastructure Check
     if not check_s3_files(bucket, ""):
         log.warn("no_files_found_in_bronze", bucket=bucket)
         return
 
     spark = SparkSessionFactory.get_session()
-
-    # 1. Dynamic Path (Avoiding reading ALL the bucket each time)
-    # In production, the date will be passed as argument of the script
-    from datetime import datetime
-
-    today = datetime.now().strftime("%Y-%m-%d")
-
     bronze_path = f"s3a://{bucket}/*.json"
-    log.info("starting_transformation", processing_date=today, source=bronze_path)
 
     try:
+        # 2. Extract
         raw_df = (
             spark.read.option("multiline", "true").schema(NEWS_SCHEMA).json(bronze_path)
         )
 
-        # Preventive Validation:
         if raw_df.isEmpty():
             log.warn("source_data_empty", path=bronze_path)
             return
-        # Transformation (Explode & Flatten)
-        transformed_df = (
-            raw_df.select(F.explode("articles").alias("article"))
-            .select(
-                F.col("article.source.name").alias("source_name"),
-                F.col("article.author"),
-                F.col("article.title").alias("title"),
-                F.col("article.url").alias("url"),
-                F.col("article.publishedAt")
-                .cast(TimestampType())
-                .alias("published_at"),
-                F.to_date("article.publishedAt").alias("event_date"),
-                F.col("article.content"),
-            )
-            .withColumn(
-                "processed_at", F.current_timestamp()
-            )  # Timestamp to know WHEN it INSERT/UPDATE
-            .filter(
-                "title IS NOT NULL AND title != '[Removed]'"
-            )  # Sintaxis SQL es más limpia
-            .dropDuplicates(["title", "published_at"])
-        )
 
-        table_name = "local.silver.news_articles"
+        # 3. Transform
+        log.info("transforming_data", source=bronze_path)
+        transformed_df = transform_articles(raw_df)
 
-        # 2. Iceberg Partitioning (Using 'event_date')
-        # Usamos partitionBy para que las queries por fecha sean ultra rápidas
-        log.info("writing_to_iceberg_partitioned", table=table_name)
-
-        # 3. Best Practice: MERGE INTO (Upsert)
-        # Si la tabla no existe, la creamos. Si existe, hacemos MERGE.
-        if not spark.catalog.tableExists(table_name):
-            log.info("creating_new_iceberg_table", table=table_name)
-            transformed_df.writeTo(table_name).partitionedBy("event_date").create()
-        else:
-            log.info("performing_iceberg_merge", table=table_name)
-            # This avoid historic duplicates comparing title & date
-            transformed_df.createOrReplaceTempView("source_data")
-
-            spark.sql(f"""
-                MERGE INTO {table_name} t
-                USING source_data s
-                ON t.title = s.title AND t.published_at = s.published_at
-                WHEN MATCHED THEN 
-                    UPDATE SET * -- Update all the values if title & date MATCH
-                WHEN NOT MATCHED THEN 
-                    INSERT * -- Inserta si es un registro totalmente nuevo
-            """)
-
+        # 4. Load
+        upsert_to_iceberg(spark, transformed_df, table_name)
         log.info("transformation_success", table=table_name)
 
     except AnalysisException as ae:
-        # Errores de SQL, columnas faltantes o tablas no encontradas
         log.error("schema_or_sql_error", error=str(ae), table=table_name)
         raise ae
     except Exception as e:
-        # Cualquier otro error (red, memoria, etc.)
         log.error("unexpected_transformation_error", error=str(e))
         raise e
+
+
+if __name__ == "__main__":
+    transform_bronze_to_silver()
