@@ -1,59 +1,135 @@
-import os
-import structlog
 from pyspark.sql import functions as F
-from pyspark.sql.types import TimestampType
-from config.spark_base import SparkSessionFactory  # Importamos tu Factory
+from pyspark.sql.types import (
+    StructType,
+    StructField,
+    StringType,
+    ArrayType,
+    TimestampType,
+)
+from pyspark.sql.utils import AnalysisException
+from config.spark_base import SparkSessionFactory
 from utils.logging_config import log
+import boto3
+import os
+
+# 1. Explicit definition (Schema Enforcement)
+# This guarantees that Spark doesn't have to infer the schema.
+NEWS_SCHEMA = StructType(
+    [
+        StructField(
+            "articles",
+            ArrayType(
+                StructType(
+                    [
+                        StructField(
+                            "source", StructType([StructField("name", StringType())])
+                        ),
+                        StructField("author", StringType()),
+                        StructField("title", StringType()),
+                        StructField("description", StringType()),
+                        StructField("url", StringType()),
+                        StructField("publishedAt", StringType()),
+                        StructField("content", StringType()),
+                    ]
+                )
+            ),
+        )
+    ]
+)
+
+
+def check_s3_files(bucket, prefix):
+    """Pro Check: Pre-validation without Spark"""
+    s3 = boto3.client(
+        "s3", endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
+    )
+    response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+    return "Contents" in response
 
 
 def transform_bronze_to_silver():
-    # Usamos la Factory que ya tiene los configs de LocalStack y el fix de Hadoop
+    # Pre-Spark Check
+    bucket = "silicon-intel-bronze"
+    if not check_s3_files(bucket, ""):
+        log.warn("no_files_found_in_bronze", bucket=bucket)
+        return
+
     spark = SparkSessionFactory.get_session()
 
-    bronze_path = "s3a://silicon-intel-bronze/news_data_raw.json"
+    # 1. Dynamic Path (Avoiding reading ALL the bucket each time)
+    # In production, the date will be passed as argument of the script
+    from datetime import datetime
 
-    log.info("starting_silver_transformation", source=bronze_path)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    bronze_path = f"s3a://{bucket}/*.json"
+    log.info("starting_transformation", processing_date=today, source=bronze_path)
 
     try:
-        # 1. Read Raw JSON
-        raw_df = spark.read.option("multiline", "true").json(bronze_path)
+        raw_df = (
+            spark.read.option("multiline", "true").schema(NEWS_SCHEMA).json(bronze_path)
+        )
 
-        # 2. Transform (Explode & Flatten)
-        silver_df = (
+        # Preventive Validation:
+        if raw_df.isEmpty():
+            log.warn("source_data_empty", path=bronze_path)
+            return
+        # Transformation (Explode & Flatten)
+        transformed_df = (
             raw_df.select(F.explode("articles").alias("article"))
             .select(
                 F.col("article.source.name").alias("source_name"),
                 F.col("article.author"),
-                F.col("article.title"),
-                F.col("article.description"),
-                F.col("article.url"),
+                F.col("article.title").alias("title"),
+                F.col("article.url").alias("url"),
                 F.col("article.publishedAt")
                 .cast(TimestampType())
                 .alias("published_at"),
-                # column added only for partitioning (Optional)
                 F.to_date("article.publishedAt").alias("event_date"),
                 F.col("article.content"),
             )
-            .filter((F.col("title") != "[Removed]") & (F.col("title").isNotNull()))
+            .withColumn(
+                "processed_at", F.current_timestamp()
+            )  # Timestamp to know WHEN it INSERT/UPDATE
+            .filter(
+                "title IS NOT NULL AND title != '[Removed]'"
+            )  # Sintaxis SQL es más limpia
             .dropDuplicates(["title", "published_at"])
         )
 
-        # 3. Write as Iceberg Table
-        # 'local' is the name of the Catalog that was configured in the Factory
         table_name = "local.silver.news_articles"
 
-        log.info("writing_to_iceberg", table=table_name)
+        # 2. Iceberg Partitioning (Using 'event_date')
+        # Usamos partitionBy para que las queries por fecha sean ultra rápidas
+        log.info("writing_to_iceberg_partitioned", table=table_name)
 
-        silver_df.writeTo(table_name).createOrReplace()
+        # 3. Best Practice: MERGE INTO (Upsert)
+        # Si la tabla no existe, la creamos. Si existe, hacemos MERGE.
+        if not spark.catalog.tableExists(table_name):
+            log.info("creating_new_iceberg_table", table=table_name)
+            transformed_df.writeTo(table_name).partitionedBy("event_date").create()
+        else:
+            log.info("performing_iceberg_merge", table=table_name)
+            # This avoid historic duplicates comparing title & date
+            transformed_df.createOrReplaceTempView("source_data")
 
-        log.info("transformation_success", row_count=silver_df.count())
+            spark.sql(f"""
+                MERGE INTO {table_name} t
+                USING source_data s
+                ON t.title = s.title AND t.published_at = s.published_at
+                WHEN MATCHED THEN 
+                    UPDATE SET * -- Update all the values if title & date MATCH
+                WHEN NOT MATCHED THEN 
+                    INSERT * -- Inserta si es un registro totalmente nuevo
+            """)
 
+        log.info("transformation_success", table=table_name)
+
+    except AnalysisException as ae:
+        # Errores de SQL, columnas faltantes o tablas no encontradas
+        log.error("schema_or_sql_error", error=str(ae), table=table_name)
+        raise ae
     except Exception as e:
-        log.error("transformation_failed", error=str(e))
-        raise
-    finally:
-        spark.stop()
-
-
-if __name__ == "__main__":
-    transform_bronze_to_silver()
+        # Cualquier otro error (red, memoria, etc.)
+        log.error("unexpected_transformation_error", error=str(e))
+        raise e

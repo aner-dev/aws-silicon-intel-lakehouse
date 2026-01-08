@@ -4,7 +4,7 @@ import json
 import requests
 import sys
 import os
-
+from datetime import datetime
 import structlog
 from utils.logging_config import setup_logging
 
@@ -41,6 +41,9 @@ def run_ingestion():
         response.raise_for_status()
 
         raw_data = response.json()
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_key = f"news_data_{timestamp}.json"
 
         s3_client = boto3.client(
             "s3",

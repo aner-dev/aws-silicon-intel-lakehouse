@@ -23,3 +23,8 @@
 ### Conclusion
 Converting to Parquet is **not** a bad practice, but leaving it as "Pure Parquet" in the Silver/Gold layers is considered **Legacy Architecture**. Modern Lakehouses use Iceberg/Delta/Hudi to turn those files into professional, reliable tables.
 
+# schema enforcement 
+* directly define the schema in the silver_processing file (pyspark)
+* take the control and dictate to the engine the exactly structures that it should expect 
+* instead of leave the motor *infer* that structure (Schema Inference) 
+  - An unnecessary *READ-in-memory* and a bad/suboptimal approach for Big Data production
