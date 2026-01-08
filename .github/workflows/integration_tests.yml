@@ -20,14 +20,21 @@ jobs:
           docker run -d --name localstack -p 4566:4566 -p 4510-4559:4510-4559 localstack/localstack
           echo "Waiting for LocalStack to be ready..."
           timeout 60s bash -c "until curl -s localhost:4566/_localstack/health | grep '\"s3\": \"available\"'; do sleep 2; done"
-        # 2. Setup Python and UV
+      # 2. Setup Python and UV
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
       - name: Install Dependencies
         run: uv sync
 
+      # 2.5 Install Official Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.14.3"
+          terraform_wrapper: false
       # 3. Spin up Infrastructure with Terraform
+
       - name: Terraform Apply
         working-directory: ./infra
         run: |
