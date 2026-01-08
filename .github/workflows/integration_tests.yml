@@ -40,6 +40,13 @@ jobs:
         run: |
           terraform init
           terraform apply -auto-approve
+        env:
+          # Esto llena la variable 'news_api_key' del .tf automáticamente
+          TF_VAR_news_api_key: "dummy_key_for_testing"
+          # Credenciales para LocalStack
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
       # 4. Mock Data (The step you missed today)
       - name: Seed Bronze Layer
         run: |
