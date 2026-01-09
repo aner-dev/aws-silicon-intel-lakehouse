@@ -41,9 +41,9 @@ status:
 	@echo "--- CONTAINERS ---"
 	podman ps
 	@echo "--- S3 BUCKETS ---"
-	awslocal s3 ls
+	@AWS_ENDPOINT_URL=http://localhost:4566 aws s3 ls
 	@echo "--- SECRETS ---"
-	awslocal secretsmanager list-secrets
+	@AWS_ENDPOINT_URL=http://localhost:4566 aws secretsmanager list-secrets
 
 # 6. Stop/Clean
 down:

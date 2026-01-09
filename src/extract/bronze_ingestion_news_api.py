@@ -29,48 +29,95 @@ def get_s3_secrets():
         sys.exit(1)
 
 
+def log_audit_dynamo(file_key, status):
+    """GAP: Currently, the pipeline is not able to show which files failed without checking logs.
+    Dynamo solves this."""
+    dynamo = boto3.resource(
+        "dynamodb", endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
+    )
+    table = dynamo.Table("pipeline_audit")
+    table.put_item(
+        Item={
+            "job_id": f"bronze_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "file_key": file_key,
+            "status": status,
+            "timestamp": datetime.now().isoformat(),
+            "layer": "bronze",  # added layer for posterior filtering in DynamoDB
+        }
+    )
+
+
+def send_sns_alert(error_message):
+    """GAP: If the script fails in the middle of the night, no one finds out."""
+    sns = boto3.client(
+        "sns", endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
+    )
+
+    # El nombre debe coincidir EXACTAMENTE con el de notifications.tf
+    topic_name = "data-pipeline-alerts"
+    topic_arn = f"arn:aws:sns:us-east-1:000000000000:{topic_name}"
+
+    try:
+        sns.publish(
+            TopicArn=topic_arn,
+            Message=f"CRITICAL: Bronze Ingestion Failed: {error_message}",
+            Subject="Pipeline Alert: Bronze Layer",
+        )
+    except Exception as e:
+        log.error("sns_alert_failed", error=str(e))
+
+
 def run_ingestion():
     api_key, bucket_name = get_s3_secrets()
     query = "intel AND silicon"
     url = f"https://newsapi.org/v2/everything?q={query}&apiKey={api_key}"
-
-    log.info("starting_ingestion", query=query, target_bucket=bucket_name)
+    full_key = "N/A"  # Placeholder for log in case of early error
 
     try:
+        # 1. API REQUEST
+        log.info("starting_api_request", query=query)
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         raw_data = response.json()
 
-    except requests.exceptions.HTTPError as errh:
-        log.error("api_http_error", status=response.status_code, error=str(errh))
-        raise SystemExit(errh)  # Stops the pipeline
-    except requests.exceptions.ConnectionError as errc:
-        log.error("api_connection_error", error=str(errc))
-        raise SystemExit(errc)
-    except requests.exceptions.Timeout as errt:
-        log.error("api_timeout_error", error=str(errt))
-        raise SystemExit(errt)
-    except requests.exceptions.JSONDecodeError as errj:
-        log.info("api_malformed_json", error=str(errj))
-        raise SystemExit(errj)
+        # 2. S3 PREPARATION
+        now = datetime.now()
+        partition_path = f"year={now.year}/month={now.month:02d}/day={now.day:02d}"
+        file_name = f"news_{now.strftime('%H%M%S')}.json"
+        full_key = f"bronze/news_api/{partition_path}/{file_name}"
+
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566"),
+        )
+
+        # 3. S3 UPLOAD (Capture red/permissions failures)
+        log.info("uploading_to_s3", bucket=bucket_name, key=full_key)
+        s3_client.put_object(
+            Bucket=bucket_name, Key=full_key, Body=json.dumps(raw_data)
+        )
+
+        # 4. AUDIT LOG (DynamoDB)
+        log_audit_dynamo(full_key, "SUCCESS")
+
+        log.info("ingestion_success", key=full_key)
+        return {"success": True, "file": full_key}
+
+    except requests.exceptions.RequestException as e:
+        # API specific errors
+        error_msg = f"API_ERROR: {str(e)}"
+        log.error("api_failed", error=error_msg)
+        send_sns_alert(error_msg)
+        log_audit_dynamo(full_key, "FAILED_API")
+        raise
+
     except Exception as e:
-        log.error("unidentified_error", error=str(e))
-        raise e
-
-    s3_client = boto3.client(
-        "s3",
-        endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566"),
-        region_name="us-east-1",
-    )
-    now = datetime.now()
-    partition_path = f"year={now.year}/month={now.month:02d}/day={now.day:02d}"
-    file_name = f"news_{now.strftime('%H%M%S')}.json"
-    full_key = f"bronze/news_api/{partition_path}/{file_name}"
-
-    s3_client.put_object(Bucket=bucket_name, Key=full_key, Body=json.dumps(raw_data))
-
-    log.info("ingestion_success", bucket=bucket_name, key=full_key)
-    return {"success": True, "file": full_key}
+        # Capture failures of S3, Dynamo or unexpected errors
+        error_msg = f"INFRASTRUCTURE_ERROR: {str(e)}"
+        log.error("ingestion_failed", error=error_msg, exc_info=True)
+        send_sns_alert(error_msg)
+        log_audit_dynamo(full_key, "FAILED_INFRA")
+        raise
 
 
 if __name__ == "__main__":
