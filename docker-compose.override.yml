@@ -1,36 +1,26 @@
-version: "3.1"
-
 services:
   localstack:
     image: docker.io/localstack/localstack:latest
-    container_name: localstack_lakehouse
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=s3,iam,secretsmanager
+      - SERVICES=s3,iam,secretsmanager,lambda,sqs,sns,athena,cloudwatch,events,stepfunctions
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
-      # El :ro (read-only) es buena práctica para sockets en Podman
       - "${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro"
-    networks:
-      - airflow
 
   spark-master:
     image: docker.io/apache/spark:3.5.0
-    container_name: spark-master
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
     ports:
       - "8081:8081" # Web UI
       - "7077:7077" # Master Port
-    networks:
-      - airflow
 
   spark-worker:
     image: docker.io/apache/spark:3.5.0
-    container_name: spark-worker
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
@@ -38,5 +28,9 @@ services:
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
     depends_on:
       - spark-master
-    networks:
-      - airflow
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1500"

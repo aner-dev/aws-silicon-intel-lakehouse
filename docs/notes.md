@@ -28,3 +28,8 @@ Converting to Parquet is **not** a bad practice, but leaving it as "Pure Parquet
 * take the control and dictate to the engine the exactly structures that it should expect 
 * instead of leave the motor *infer* that structure (Schema Inference) 
   - An unnecessary *READ-in-memory* and a bad/suboptimal approach for Big Data production
+
+# apache iceberg & AWS Glue 
+Utilize iceberg for manage ACID transactions and schema evolution* in *S3*. 
+An implementation that integrates directly with *AWS Glue Data Catalog* in **production environments** 
+
