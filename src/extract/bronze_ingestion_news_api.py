@@ -37,38 +37,40 @@ def run_ingestion():
     log.info("starting_ingestion", query=query, target_bucket=bucket_name)
 
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         response.raise_for_status()
-
         raw_data = response.json()
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_key = f"news_data_{timestamp}.json"
+    except requests.exceptions.HTTPError as errh:
+        log.error("api_http_error", status=response.status_code, error=str(errh))
+        raise SystemExit(errh)  # Stops the pipeline
+    except requests.exceptions.ConnectionError as errc:
+        log.error("api_connection_error", error=str(errc))
+        raise SystemExit(errc)
+    except requests.exceptions.Timeout as errt:
+        log.error("api_timeout_error", error=str(errt))
+        raise SystemExit(errt)
+    except requests.exceptions.JSONDecodeError as errj:
+        log.info("api_malformed_json", error=str(errj))
+        raise SystemExit(errj)
+    except Exception as e:
+        log.error("unidentified_error", error=str(e))
+        raise e
 
-        s3_client = boto3.client(
-            "s3",
-            endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566"),
-            region_name="us-east-1",
-        )
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566"),
+        region_name="us-east-1",
+    )
+    now = datetime.now()
+    partition_path = f"year={now.year}/month={now.month:02d}/day={now.day:02d}"
+    file_name = f"news_{now.strftime('%H%M%S')}.json"
+    full_key = f"bronze/news_api/{partition_path}/{file_name}"
 
-        file_key = "news_data_raw.json"
-        s3_client.put_object(
-            Bucket=bucket_name, Key=file_key, Body=json.dumps(raw_data, indent=4)
-        )
+    s3_client.put_object(Bucket=bucket_name, Key=full_key, Body=json.dumps(raw_data))
 
-        log.info("ingestion_success", bucket=bucket_name, key=file_key)
-        return {"success": True, "file": file_key}
-
-    except requests.exceptions.HTTPError:
-        log.error("api_http_error", status_code=response.status_code, exc_info=True)
-    except requests.exceptions.JSONDecodeError:
-        log.error("json_decode_error", error="API returned invalid JSON", exc_info=True)
-    except requests.exceptions.RequestException:
-        log.error("network_error", exc_info=True)
-    except Exception:
-        log.error("unexpected_error", exc_info=True)
-
-    return {"success": False, "error": "Ingestion failed"}
+    log.info("ingestion_success", bucket=bucket_name, key=full_key)
+    return {"success": True, "file": full_key}
 
 
 if __name__ == "__main__":
