@@ -1,3 +1,5 @@
+# spark_setup.py
+
 import os
 from pyspark.sql import SparkSession
 from pyspark import SparkContext
@@ -22,15 +24,15 @@ class SparkSessionFactory:
                     "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
                 )
                 .config(
-                    "spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog"
+                    "spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog"
                 )
-                .config("spark.sql.catalog.local.type", "hadoop")
+                .config("spark.sql.catalog.iceberg.type", "hadoop")
                 .config(
-                    "spark.sql.catalog.local.warehouse",
-                    "s3a://silicon-intel-gold/iceberg/",
+                    "spark.sql.catalog.iceberg.warehouse",
+                    "s3a://silicon-intel-silver/warehouse/",
                 )
                 # OPTIMIZATION: 10GB+ logic
-                .config("spark.sql.shuffle.partitions", "200")
+                .config("spark.sql.shuffle.partitions", "2")
                 .config("spark.sql.iceberg.vectorization.enabled", "true")
                 .config(
                     "spark.jars.packages",
@@ -38,11 +40,12 @@ class SparkSessionFactory:
                     "org.apache.hadoop:hadoop-aws:3.3.4,"
                     "com.amazonaws:aws-java-sdk-bundle:1.12.262",
                 )
-                # --- S3A SECURITY FIX: Hard-coding numeric values only ---
+                # --- S3A SECURITY ---
                 .config("spark.hadoop.fs.s3a.endpoint", AWS_ENDPOINT)
                 .config("spark.hadoop.fs.s3a.access.key", "test")
                 .config("spark.hadoop.fs.s3a.secret.key", "test")
                 .config("spark.hadoop.fs.s3a.path.style.access", "true")
+                .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
                 .config(
                     "spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem"
                 )
@@ -65,6 +68,8 @@ class SparkSessionFactory:
             hadoop_conf.set("fs.s3a.connection.timeout", "60000")
             hadoop_conf.set("fs.s3a.connection.establish.timeout", "60000")
             hadoop_conf.set("fs.s3a.experimental.fadvise", "random")
+            hadoop_conf.set("fs.s3a.endpoint", AWS_ENDPOINT)
+            hadoop_conf.set("fs.s3a.connection.ssl.enabled", "false")
 
             log.info(
                 "spark_session_created",

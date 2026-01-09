@@ -4,11 +4,12 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=s3,iam,secretsmanager,lambda,sqs,sns,athena,cloudwatch,events,stepfunctions,dynamodb
+      - SERVICES=s3,iam,secretsmanager,lambda,sqs,sns,events,dynamodb
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
       - "${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro"
+      - "./.localstack:/var/lib/localstack"
 
   spark-master:
     image: docker.io/apache/spark:3.5.0

@@ -1,6 +1,6 @@
 # bronze_inspect_news_api.py
 
-from config.spark_base import SparkSessionFactory
+from config.spark_setup import SparkSessionFactory
 from utils.logging_config import log
 
 

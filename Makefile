@@ -1,56 +1,54 @@
 # --- SETTINGS ---
 DOCKER_COMPOSE = podman-compose 
-TERRAFORM_DIR = ./infra
+TERRAFORM_DIR  = ./infra
 
-# --- COMMANDS ---
-.PHONY: help up down setup astro-start restart status clean
+# --- TARGETS DECLARATION (.PHONY) ---
+# Declare all commands that do not represent physical files
+.PHONY: help up down setup astro-start restart status clean \
+        ingest multiply seed dev
 
+# --- 0. MENU ---
 help:
 	@echo "Silicon Intel Lakehouse - Development Menu"
-	@echo "  make up          Start LocalStack and Spark (Sidecars)"
-	@echo "  make setup       Deploy S3 buckets and Secrets via Terraform"
-	@echo "  make astro-start Start Airflow (Astro)"
-	@echo "  make dev         FULL BOOTSTRAP (The 'Start of Day' command)"
-	@echo "  make status      Check infrastructure health"
-	@echo "  make down        Stop everything"
+	@echo "  make up           Start Sidecars only (via Podman)"
+	@echo "  make setup        Deploy S3 buckets and Secrets via Terraform"
+	@echo "  make astro-start  Start Airflow and Sidecars (Astro)"
+	@echo "  make seed         Ingest NewsAPI (Bronze) + Multiply (Silver)"
+	@echo "  make dev          FULL BOOTSTRAP (Infra + Data Seeding)"
+	@echo "  make status       Check infrastructure health"
+	@echo "  make down         Stop everything"
+	@echo "  make clean        Wipe infrastructure and Terraform state"
 
-# 1. Start Docker/Podman Sidecars
+# --- 1. INFRASTRUCTURE & ORCHESTRATION ---
+# 'up' is removed as a standalone step in 'dev' since Astro handles container lifecycle.
+# It remains available for manually starting sidecars if needed.
 up:
-	@echo "🚀 Starting Sidecar Infrastructure..."
-	$(DOCKER_COMPOSE) up -d localstack spark-master spark-worker
-	@echo "⏳ Waiting for LocalStack..."
-	@sleep 7
+	@echo "🚀 Starting Sidecars via Podman..."
+	$(DOCKER_COMPOSE) up -d
 
-# 2. Deploy Infrastructure
 setup:
 	@echo "🏗️ Applying Terraform (LocalStack)..."
 	cd $(TERRAFORM_DIR) && terraform init && terraform apply -auto-approve
 	@echo "✅ Infrastructure ready."
 
-# 3. Start Orchestrator
+# --- 2. ORCHESTRATION ---
 astro-start:
-	@echo "🌌 Starting Astronomer Airflow..."
+	@echo "🌌 Starting Astronomer (Airflow + Sidecars)..."
 	astro dev start
 
-# 4. FULL START (Your Daily Command)
-dev: up setup astro-start
-	@echo "🔥 ALL SYSTEMS GO. Happy Coding!"
+# --- 3. DATA OPERATIONS ---
+ingest:
+	@echo "📥 Ingesting seed data..."
+	uv run src/extract/bronze_ingestion_news_api.py
 
-# 5. Monitoring
-status:
-	@echo "--- CONTAINERS ---"
-	podman ps
-	@echo "--- S3 BUCKETS ---"
-	@AWS_ENDPOINT_URL=http://localhost:4566 aws s3 ls
-	@echo "--- SECRETS ---"
-	@AWS_ENDPOINT_URL=http://localhost:4566 aws secretsmanager list-secrets
+multiply:
+	@echo "💎 Multiplying data for Silver layer..."
+	uv run src/utils/data_multiplier.py
 
-# 6. Stop/Clean
-down:
-	$(DOCKER_COMPOSE) down
-	astro dev stop
+seed: ingest multiply
+	@echo "✅ Data seeding completed."
 
-clean: down
-	@echo "🧹 Cleaning up terraform state..."
-	rm -rf $(TERRAFORM_DIR)/.terraform
-	rm -f $(TERRAFORM_DIR)/terraform.tfstate*
+# --- 4. THE MASTER COMMAND (REORDERED) ---
+# First we launch Astro (starting LocalStack/Spark), then Terraform, then Seed.
+dev: astro-start setup seed
+	@echo "🔥 ALL SYSTEMS GO. Lakehouse is populated and ready!"

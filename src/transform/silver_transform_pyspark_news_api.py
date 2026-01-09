@@ -1,5 +1,8 @@
 # silver_transform_pyspark_news_api.py
+
 import os
+import boto3
+from datetime import datetime
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
     StructType,
@@ -9,12 +12,12 @@ from pyspark.sql.types import (
     TimestampType,
 )
 from pyspark.sql.utils import AnalysisException
-import boto3
-
-from config.spark_base import SparkSessionFactory
+from botocore.exceptions import ClientError
+from pyspark.errors import PySparkException
+from config.spark_setup import SparkSessionFactory
 from utils.logging_config import log
 
-# 1. Schema Enforcement definition
+# 1. Schema Definition (Schema Enforcement)
 NEWS_SCHEMA = StructType(
     [
         StructField(
@@ -39,8 +42,26 @@ NEWS_SCHEMA = StructType(
 )
 
 
+def log_audit_dynamo(status, table_name, record_count=0):
+    """Registers the job result in the audit table."""
+    dynamo = boto3.resource(
+        "dynamodb", endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
+    )
+    table = dynamo.Table("pipeline_audit")
+    table.put_item(
+        Item={
+            "job_id": f"silver_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "status": status,
+            "table_target": table_name,
+            "record_count": record_count,
+            "timestamp": datetime.now().isoformat(),
+            "layer": "silver",
+        }
+    )
+
+
 def check_s3_files(bucket, prefix):
-    """Pre-validation without Spark to save resources."""
+    """Pre-validation in S3 before starting Spark."""
     s3 = boto3.client(
         "s3", endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
     )
@@ -49,10 +70,7 @@ def check_s3_files(bucket, prefix):
 
 
 def transform_articles(df):
-    """
-    BUSINESS LOGIC ONLY.
-    Input: raw_df -> Output: transformed_df
-    """
+    """Business Logic: Cleaning and structuring."""
     return (
         df.select(F.explode("articles").alias("article"))
         .select(
@@ -71,7 +89,7 @@ def transform_articles(df):
 
 
 def upsert_to_iceberg(spark, df, table_name, partition_col="event_date"):
-    """Handles the Iceberg-specific MERGE logic."""
+    """Upsert Logic (MERGE) specific to Apache Iceberg."""
     if not spark.catalog.tableExists(table_name):
         log.info("creating_new_iceberg_table", table=table_name)
         df.writeTo(table_name).partitionedBy(partition_col).create()
@@ -82,49 +100,66 @@ def upsert_to_iceberg(spark, df, table_name, partition_col="event_date"):
             MERGE INTO {table_name} t
             USING source_data s
             ON t.title = s.title AND t.published_at = s.published_at
-            WHEN MATCHED THEN 
-                UPDATE SET *
-            WHEN NOT MATCHED THEN 
-                INSERT *
+            WHEN MATCHED THEN UPDATE SET *
+            WHEN NOT MATCHED THEN INSERT *
         """)
 
 
 def transform_bronze_to_silver():
-    """Orchestration Function (The Entry Point)"""
+    """Silver Layer Orchestrator."""
     bucket = "silicon-intel-bronze"
-    table_name = "local.silver.news_articles"
+    table_name = "iceberg.silver.news_articles"
 
-    # 1. Infrastructure Check
-    if not check_s3_files(bucket, ""):
+    if not check_s3_files(bucket, "bronze/news_api/"):
         log.warn("no_files_found_in_bronze", bucket=bucket)
         return
 
     spark = SparkSessionFactory.get_session()
-    bronze_path = f"s3a://{bucket}/*.json"
+    # Captures all partitioned JSON files
+    bronze_path = f"s3a://{bucket}/bronze/news_api/*/*/*/*.json"
 
     try:
-        # 2. Extract
+        log.info("starting_silver_transformation", source=bronze_path)
+
+        # EXTRACT
         raw_df = (
             spark.read.option("multiline", "true").schema(NEWS_SCHEMA).json(bronze_path)
         )
-
         if raw_df.isEmpty():
             log.warn("source_data_empty", path=bronze_path)
             return
 
-        # 3. Transform
-        log.info("transforming_data", source=bronze_path)
+        # TRANSFORM
         transformed_df = transform_articles(raw_df)
+        count = transformed_df.count()
 
-        # 4. Load
+        # LOAD
         upsert_to_iceberg(spark, transformed_df, table_name)
-        log.info("transformation_success", table=table_name)
+
+        # AUDIT
+        log_audit_dynamo("SUCCESS", table_name, record_count=count)
+        log.info("transformation_success", table=table_name, count=count)
 
     except AnalysisException as ae:
+        # SQL errors, Schema or Tables not founded
         log.error("schema_or_sql_error", error=str(ae), table=table_name)
+        log_audit_dynamo("FAILED_SCHEMA", table_name)
         raise ae
+    except ClientError as ce:
+        # AWS-specific errors (S3/Dynamo)
+        log.error("aws_service_error", error=str(ce))
+        # We don't trigger log_audit_dynamo here because Dynamo likely failed
+        raise ce
+
+    except PySparkException as pe:
+        # Internal Spark execution errors (JVM, Memory, etc.)
+        log.error("spark_runtime_error", error=str(pe))
+        log_audit_dynamo("FAILED_SPARK", table_name)
+        raise pe
+
     except Exception as e:
-        log.error("unexpected_transformation_error", error=str(e))
+        log.error("silver_transformation_failed", error=str(e))
+        log_audit_dynamo("FAILED", table_name)
         raise e
 
 

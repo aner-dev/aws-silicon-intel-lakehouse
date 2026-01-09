@@ -1,3 +1,5 @@
+# validate_silver.py
+
 import sys
 from pyspark.sql import SparkSession
 import great_expectations as gx
@@ -8,7 +10,7 @@ def run_quality_checks():
 
     # 1. Load the Silver table (Iceberg)
     # Adjusted to your table name in LocalStack
-    df = spark.read.table("local.silver.news_articles")
+    df = spark.read.table("iceberg.silver.news_articles")
     print(f"DEBUG: Silver row count = {df.count()}")
 
     # 2. Configure GX

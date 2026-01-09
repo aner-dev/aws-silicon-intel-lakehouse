@@ -13,6 +13,7 @@ venv/
 .ruff_cache/
 .pytype/
 
+
 # --- LSP & Typing ---
 # Si ty.toml es solo para tu entorno local:
 ty.toml
@@ -41,6 +42,7 @@ include/
 
 # --- LocalStack & Data ---
 data/localstack/
+.localstack/
 .env
 build_final_attempt.log
 docs/prompts.md
