@@ -5,8 +5,8 @@ TERRAFORM_DIR  = ./infra
 # --- TARGETS DECLARATION (.PHONY) ---
 # Declare all commands that do not represent physical files
 .PHONY: help up down setup astro-start restart status clean \
-	ingest ingest-news ingest-reviews \
-        transform transform-news transform-reviews \
+	ingest ingest-news ingest-taxi \
+        transform transform-news transform-taxi \
         multiply seed dev
 
 # --- 0. MENU ---
@@ -15,7 +15,7 @@ help:
 	@echo "  make up            Start Sidecars only (via Podman)"
 	@echo "  make setup         Deploy S3 buckets and Secrets via Terraform"
 	@echo "  make astro-start   Start Airflow and Sidecars (Astro)"
-	@echo "  make ingest        Ingest ALL data (News + Reviews)"
+	@echo "  make ingest        Ingest ALL data (News + Taxi)"
 	@echo "  make transform     Transform ALL data (Silver/Iceberg)"
 	@echo "  make seed          Full Ingestion + Transformation + Multiply"
 	@echo "  make dev           FULL BOOTSTRAP (Orchestration + Infra + Data)"
@@ -43,23 +43,23 @@ ingest-news:
 	@echo "📥 Ingesting News API data..."
 	uv run src/extract/bronze_ingestion_news_api.py
 
-ingest-reviews:
-	@echo "📥 Ingesting Amazon Reviews data..."
-	uv run src/extract/bronze_ingestion_reviews.py
+ingest-taxi:
+	@echo "📥 Ingesting Nyc Taxi data..."
+	uv run src/extract/bronze_ingestion_taxi.py
 
 # Silver Layer (Transformation)
 transform-news:
 	@echo "💎 Transforming News API to Silver (Iceberg)..."
 	uv run src/transform/silver_transform_pyspark_news_api.py
 
-transform-reviews:
-	@echo "💎 Transforming Amazon Reviews to Silver (Iceberg)..."
-	uv run src/transform/silver_transform_pyspark_amazon_reviews.py
+transform-taxi:
+	@echo "💎 Transforming Nyc Taxi to Silver (Iceberg)..."
+	uv run src/transform/silver_transform_pyspark_taxi.py
 
 # Combined Commands
-ingest: ingest-news ingest-reviews
+ingest: ingest-news ingest-taxi
 
-transform: transform-news transform-reviews
+transform: transform-news transform-taxi
 
 # Keep 'multiply' if you still use that specific data-augmentation script
 multiply:

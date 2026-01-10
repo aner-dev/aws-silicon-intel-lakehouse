@@ -31,8 +31,13 @@ class SparkSessionFactory:
                     "spark.sql.catalog.iceberg.warehouse",
                     "s3a://silicon-intel-silver/warehouse/",
                 )
-                # OPTIMIZATION: 10GB+ logic
-                .config("spark.sql.shuffle.partitions", "2")
+                # --- AUTO-OPTIMIZATION FOR LARGE DATASETS ---
+                .config("spark.sql.adaptive.enabled", "true")
+                .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+                .config(
+                    "spark.sql.shuffle.partitions", "auto"
+                )  # Dynamic instead of "2"
+                # ICEBERG SPECIFIC OPTIMIZATIONS
                 .config("spark.sql.iceberg.vectorization.enabled", "true")
                 .config(
                     "spark.jars.packages",
