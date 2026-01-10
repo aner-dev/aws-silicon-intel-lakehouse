@@ -5,10 +5,7 @@ import requests
 import sys
 import os
 from datetime import datetime
-import structlog
-from utils.logging_config import setup_logging
-
-log = structlog.get_logger()
+from utils.logging_config import log, setup_logging
 
 
 def get_s3_secrets():
@@ -38,7 +35,7 @@ def log_audit_dynamo(file_key, status):
     table = dynamo.Table("pipeline_audit")
     table.put_item(
         Item={
-            "job_id": f"bronze_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "job_id": f"news_api_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             "file_key": file_key,
             "status": status,
             "timestamp": datetime.now().isoformat(),
@@ -67,9 +64,9 @@ def send_sns_alert(error_message):
         log.error("sns_alert_failed", error=str(e))
 
 
-def run_ingestion():
+def run_ingestion(topic="intel_silicon"):
     api_key, bucket_name = get_s3_secrets()
-    query = "intel AND silicon"
+    query = topic.replace("_", " AND ")
     url = f"https://newsapi.org/v2/everything?q={query}&apiKey={api_key}"
     full_key = "N/A"  # Placeholder for log in case of early error
 
@@ -82,7 +79,8 @@ def run_ingestion():
 
         # 2. S3 PREPARATION
         now = datetime.now()
-        partition_path = f"year={now.year}/month={now.month:02d}/day={now.day:02d}"
+        # Matches the 'ingested_at' column name used in Silver (pypsark processing)
+        partition_path = f"topic={topic}/ingested_at={now.strftime('%Y-%m-%d')}"
         file_name = f"news_{now.strftime('%H%M%S')}.json"
         full_key = f"bronze/news_api/{partition_path}/{file_name}"
 
@@ -120,7 +118,19 @@ def run_ingestion():
         raise
 
 
+def lambda_handler(event, context):
+    setup_logging()  # Ensure logs work in CloudWatch
+    topic = event.get("topic", "intel_silicon")
+    try:
+        result = run_ingestion(topic)
+        return {"statusCode": 200, "body": json.dumps(result)}
+    except Exception as e:
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+
+
+# 3. The Local Entry Point (Replacing main)
 if __name__ == "__main__":
     setup_logging()
-
-    run_ingestion()
+    # For local testing, we simulate an 'event'
+    test_event = {"topic": "intel_silicon"}
+    lambda_handler(test_event, None)

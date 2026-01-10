@@ -33,3 +33,20 @@ Data Validation as a first-class citizen:
 I treat data validation as a first-class citizen by embedding Great Expectations directly into my CI/CD pipeline. 
 If the data doesn't meet the quality standards, the pipeline is blocked from progressing to the Gold layer.
 Use of **automated assertions** to ensure schema consistency across all environments.
+# Partitioning & Pruning: Performance approaches 
+- Data partitioning is the *logical approach* 
+- Hive partitioning is the *physical implementation* of that approach
+  - Define the name of a column as a key-value pair 'amazon=categories/'
+- And the combination of both allows pyspark to do 'Partition Pruning'
+# resource optimization and early validation (spark = SparkSessionFactory.get_session())
+spark = SparkSessionFactory.get_session() is the *most expensive line of code* in a transformation script
+* When that line runs:
+  * A JVM (Java Virtual Machine) starts.
+  * Memory is allocated (RAM is reserved).
+  * The Spark Driver initializes.
+  * In a real cluster, Executors are requested from the resource manager.
+## 'golden order of execution' 
+* Input Validation: Check if the date string is correct.
+* Path Construction: Build your bronze_path string.
+* Metadata Check: Use boto3 (which is very cheap/fast) to check if the files actually exist in S3.
+* The Point of No Return: ONLY NOW do you start the SparkSession.

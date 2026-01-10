@@ -105,18 +105,27 @@ def upsert_to_iceberg(spark, df, table_name, partition_col="event_date"):
         """)
 
 
-def transform_bronze_to_silver():
+def transform_bronze_to_silver(processing_date: str | None = None):
     """Silver Layer Orchestrator."""
+    # 1. SETUP PARAMETERS (Fail here if logic is wrong)
+    if not processing_date:
+        processing_date = datetime.now().strftime("%Y-%m-%d")
+
     bucket = "silicon-intel-bronze"
     table_name = "iceberg.silver.news_articles"
 
-    if not check_s3_files(bucket, "bronze/news_api/"):
-        log.warn("no_files_found_in_bronze", bucket=bucket)
+    # Target the SPECIFIC partition (Performance Improvement)
+    # We assume your news_api ingestion follows a similar Hive pattern
+    partition_path = f"year={processing_date[:4]}/month={processing_date[5:7]}/day={processing_date[8:10]}"
+    bronze_path = f"s3a://{bucket}/bronze/news_api/{partition_path}/*.json"
+
+    # 2. PRE-VALIDATION (Check if data exists before starting the engine)
+    if not check_s3_files(bucket, f"bronze/news_api/{partition_path}"):
+        log.warn("no_files_found_for_date", date=processing_date)
         return
 
+    # 3. START ENGINE (Only now that we know we have work to do)
     spark = SparkSessionFactory.get_session()
-    # Captures all partitioned JSON files
-    bronze_path = f"s3a://{bucket}/bronze/news_api/*/*/*/*.json"
 
     try:
         log.info("starting_silver_transformation", source=bronze_path)
@@ -141,7 +150,7 @@ def transform_bronze_to_silver():
         log.info("transformation_success", table=table_name, count=count)
 
     except AnalysisException as ae:
-        # SQL errors, Schema or Tables not founded
+        # SQL errors, Schema or Tables not found
         log.error("schema_or_sql_error", error=str(ae), table=table_name)
         log_audit_dynamo("FAILED_SCHEMA", table_name)
         raise ae
