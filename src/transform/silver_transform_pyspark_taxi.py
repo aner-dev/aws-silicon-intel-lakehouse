@@ -1,3 +1,4 @@
+# silver_transform_pyspark_taxi.py
 from datetime import datetime
 from pyspark.sql import functions as F
 from config.spark_setup import SparkSessionFactory
@@ -20,31 +21,24 @@ def transform_taxi_bronze_to_silver(processing_date: str | None = None):
         log.info("starting_amazon_silver_transformation", source=bronze_path)
 
         # 2. READ (Optimized: Only read columns we need to save RAM)
-        df = spark.read.parquet(bronze_path).select(
-            "VendorID",
-            "tpep_pickup_datetime",
-            "tpep_dropoff_datetime",
-            "passenger_count",
-            "trip_distance",
-            "total_amount",
-        )
+        df = spark.read.parquet(bronze_path)
 
-        # 3. TRANSFORM (Predicate Pushdown: filter early so Spark skips irrelevant files)
+        # 3. TRANSFORM: Explicitly cast to resolve the BIGINT vs INT conflict
         silver_df = (
-            df.filter("trip_distance > 0")  # SQL-style strings are linter-friendly
+            df.filter("trip_distance > 0")
             .filter("VendorID IS NOT NULL")
-            .filter("tpep_pickup_datetime > '2022-12-31'")
             .select(
-                F.col("VendorID").alias("vendor_id"),
+                # We cast everything to the "Silver" standard here.
+                # 'long' handles both INT and BIGINT from the source.
+                F.col("VendorID").cast("long").alias("vendor_id"),
                 F.col("tpep_pickup_datetime").alias("pickup_time"),
                 F.col("tpep_dropoff_datetime").alias("dropoff_time"),
-                # 🟢 SCHEMA ENFORCEMENT: Ensuring strict types for the Silver layer
                 F.col("passenger_count").cast("int"),
                 F.col("trip_distance").cast("double"),
                 F.col("total_amount").cast("double"),
                 F.lit(processing_date).alias("ingested_at"),
             )
-            .distinct()  # 🟢 DATA QUALITY: Deduplication before merging
+            .distinct()
         )
 
         # 4. LOAD WITH ICEBERG OPTIMIZATION
