@@ -1,31 +1,61 @@
 import boto3
 import json
 import os
+from datetime import datetime
 from utils.logging_config import log
 
-# Config for LocalStack
+# Unified LocalStack Config
 AWS_ENDPOINT = os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
+AWS_REGION = "us-east-1"
+# This ARN comes from your Terraform outputs
+SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:000000000000:data-pipeline-alerts"
 
 
 def notify_failure(job_name: str, error_message: str):
-    """Sends a failure alert to SQS for observability."""
+    """
+    Publishes a failure event to SNS.
+    The SNS Topic then automatically 'fans out' the message to your SQS queue.
+    """
     try:
-        sqs = boto3.client("sqs", endpoint_url=AWS_ENDPOINT, region_name="us-east-1")
+        sns = boto3.client("sns", endpoint_url=AWS_ENDPOINT, region_name=AWS_REGION)
 
-        # We assume the queue 'spark-job-alerts' was created by your Terraform
-        queue_url = sqs.get_queue_url(QueueName="spark-job-alerts")["QueueUrl"]
-
-        message_body = {
+        message_payload = {
             "job": job_name,
             "status": "FAILED",
             "error": error_message,
-            "timestamp": boto3.client("sns").get_topic_attributes(
-                TopicArn="..."
-            ),  # Placeholder for metadata
+            "timestamp": datetime.now().isoformat(),
         }
 
-        sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(message_body))
-        log.info("observability_alert_sent", job=job_name)
+        sns.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Message=json.dumps(message_payload),
+            Subject=f"🚨 Pipeline Failure: {job_name}",
+        )
+
+        log.info("observability_alert_published", job=job_name)
 
     except Exception as e:
         log.error("observability_alert_failed", error=str(e))
+
+
+def log_job_status(job_id: str, status: str, details: str):
+    """
+    Logs the final status of a job to the DynamoDB audit table.
+    """
+    try:
+        dynamo = boto3.resource(
+            "dynamodb", endpoint_url=AWS_ENDPOINT, region_name=AWS_REGION
+        )
+        table = dynamo.Table("pipeline_audit")
+
+        table.put_item(
+            Item={
+                "job_id": job_id,
+                "timestamp": datetime.now().isoformat(),
+                "status": status,
+                "details": details,
+            }
+        )
+        log.info("audit_log_updated", job_id=job_id, status=status)
+    except Exception as e:
+        log.error("audit_log_failed", error=str(e))
