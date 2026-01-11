@@ -1,76 +1,53 @@
 # --- SETTINGS ---
-DOCKER_COMPOSE = podman-compose 
-TERRAFORM_DIR  = ./infra
+TERRAFORM_DIR = ./infra
 
-# --- TARGETS DECLARATION (.PHONY) ---
-# Declare all commands that do not represent physical files
-.PHONY: help up down setup astro-start restart status clean \
-	ingest ingest-news ingest-taxi \
-        transform transform-news transform-taxi \
-        multiply seed dev
+.PHONY: help setup astro-start ingest ingest-news ingest-taxi \
+        transform transform-news transform-taxi multiply seed
 
-# --- 0. MENU ---
 help:
 	@echo "Silicon Intel Lakehouse - Development Menu"
-	@echo "  make up            Start Sidecars only (via Podman)"
-	@echo "  make setup         Deploy S3 buckets and Secrets via Terraform"
-	@echo "  make astro-start   Start Airflow and Sidecars (Astro)"
-	@echo "  make ingest        Ingest ALL data (News + Taxi)"
-	@echo "  make transform     Transform ALL data (Silver/Iceberg)"
-	@echo "  make seed          Full Ingestion + Transformation + Multiply"
-	@echo "  make dev           FULL BOOTSTRAP (Orchestration + Infra + Data)"
+	@echo "  make setup           Build Infrastructure + Start Airflow"
+	@echo "  make ingest          Ingest ALL data"
+	@echo "  make transform       Transform ALL data"
+	@echo "  make seed            Full Data Population (Ingest + Transform)"
 
-
-# --- 1. INFRASTRUCTURE & ORCHESTRATION ---
-# 'up' is removed as a standalone step in 'dev' since Astro handles container lifecycle.
-# It remains available for manually starting sidecars if needed.
-up:
-	@echo "🚀 Starting Sidecars via Podman..."
-	$(DOCKER_COMPOSE) up -d
-
+# --- 1. PLATFORM ---
 setup:
-	@echo "🏗️ Applying Terraform (LocalStack)..."
+	@echo "🌌 Starting Astronomer (Airflow + LocalStack)..."
+	astro dev start --verbosity debug
+	@echo "⏳ Waiting for LocalStack API to be ready..."
+	@echo "🏗️  Provisioning AWS Infra via Terraform..."
 	cd $(TERRAFORM_DIR) && terraform init && terraform apply -auto-approve
-	@echo "✅ Infrastructure ready."
+	@echo "✅ PLATFORM READY."
 
-# --- 2. ORCHESTRATION ---
-astro-start:
-	@echo "🌌 Starting Astronomer (Airflow + Sidecars)..."
-	astro dev start
-
-# Bronze Layer (Ingestion)
+# --- 2. BRONZE LAYER (Ingestion) ---
 ingest-news:
-	@echo "📥 Ingesting News API data..."
+	@echo "📥 Ingesting News..."
 	uv run src/extract/bronze_ingestion_news_api.py
 
 ingest-taxi:
-	@echo "📥 Ingesting Nyc Taxi data..."
+	@echo "📥 Ingesting Taxi..."
 	uv run src/extract/bronze_ingestion_taxi.py
 
-# Silver Layer (Transformation)
+ingest: ingest-news ingest-taxi
+	@echo "✅ Bronze Layer Complete."
+
+# --- 3. SILVER LAYER (Transformation) ---
 transform-news:
-	@echo "💎 Transforming News API to Silver (Iceberg)..."
+	@echo "💎 Transforming News..."
 	uv run src/transform/silver_transform_pyspark_news_api.py
 
 transform-taxi:
-	@echo "💎 Transforming Nyc Taxi to Silver (Iceberg)..."
+	@echo "💎 Transforming Taxi..."
 	uv run src/transform/silver_transform_pyspark_taxi.py
 
-# Combined Commands
-ingest: ingest-news ingest-taxi
-
 transform: transform-news transform-taxi
+	@echo "✅ Silver Layer Complete."
 
-# Keep 'multiply' if you still use that specific data-augmentation script
+# --- 4. MASTER COMMANDS ---
+seed: ingest transform multiply
+	@echo "🔥 LAKEHOUSE FULLY POPULATED."
+
 multiply:
 	@echo "🧪 Running data multiplier..."
 	uv run src/utils/data_multiplier.py
-
-# Updated Seed: Now it does EVERYTHING
-seed: ingest transform multiply
-	@echo "✅ Full Data Lakehouse seeding completed."
-
-# --- 4. THE MASTER COMMAND ---
-dev: astro-start setup seed
-	@echo "🔥 ALL SYSTEMS GO. Lakehouse is populated and ready!"
-

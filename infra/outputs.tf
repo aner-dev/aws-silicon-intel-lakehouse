@@ -1,24 +1,23 @@
 output "bronze_bucket_name" {
   description = "The name of the S3 bucket for Bronze layer"
-  value       = aws_s3_bucket.layers["bronze"].id
+  value       = module.storage.bucket_ids["bronze"]
 }
 
 output "silver_bucket_name" {
   description = "The name of the S3 bucket for Silver (Iceberg) layer"
-  value       = aws_s3_bucket.layers["silver"].id
+  value       = module.storage.bucket_ids["silver"]
 }
 
 output "gold_bucket_name" {
   description = "The name of the S3 bucket for Gold layer"
-  value       = aws_s3_bucket.layers["gold"].id
-}
-
-output "secret_arn" {
-  description = "The ARN of the News API secret"
-  value       = aws_secretsmanager_secret.news_api_key.arn
+  value       = module.storage.bucket_ids["gold"]
 }
 
 output "dynamodb_table_name" {
   description = "Audit table for pipeline execution"
-  value       = aws_dynamodb_table.pipeline_audit.name
+  value       = module.database.table_name
+}
+
+output "alerts_topic_arn" {
+  value = module.notifications.sns_topic_arn
 }

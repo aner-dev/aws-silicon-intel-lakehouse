@@ -2,6 +2,7 @@
 from datetime import datetime
 from pyspark.sql import functions as F
 from config.spark_setup import SparkSessionFactory
+from utils.observability import notify_failure
 from utils.logging_config import log
 
 
@@ -69,6 +70,7 @@ def transform_taxi_bronze_to_silver(processing_date: str | None = None):
 
     except Exception as e:
         log.error("nyc_taxi_silver_failed", error=str(e))
+        notify_failure(job_name="nyc_taxi_silver_transform", error_message=str(e))
         raise e
 
 

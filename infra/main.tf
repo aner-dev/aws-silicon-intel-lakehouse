@@ -1,15 +1,16 @@
-# 1. Your Lakehouse Internal Buckets (The ones you were missing)
-resource "aws_s3_bucket" "layers" {
-  for_each = toset(["bronze", "silver", "gold"])
-  bucket   = "silicon-intel-${each.value}"
+# --- Storage Module ---
+module "storage" {
+  source = "./modules/storage"
 }
 
-# 2. The Mock Source Bucket for NYC Taxi
-resource "aws_s3_bucket" "nyc_taxi_source" {
-  bucket = "nyc-tlc"
+# --- Database Module ---
+module "database" {
+  source = "./modules/database"
 }
 
-# 3. Keep this for compatibility if needed
-resource "aws_s3_bucket" "reviews_source" {
-  bucket = "amazon-reviews-pds"
+module "notifications" {
+  source = "./modules/notifications"
 }
+
+# --- Secrets (Keep in Root or move to a module if complex) ---
+# (Keep your secrets.tf as is for now if it's small)
