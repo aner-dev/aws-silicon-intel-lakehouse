@@ -21,3 +21,6 @@ Solution: Pivoted the project infrastructure to use the **official Apache Spark 
 ### Lessons Learned
 1. **Prefer Upstream:** Always prefer official technology images (Apache, Postgres) over third-party vendors (Bitnami) unless specific hardening is required.
 2. **Registry Specificity:** Use Fully Qualified Image Names (FQIN) in Podman to avoid registry resolution ambiguity.
+
+# Spark & Schema Mismatch
+I encountered a schema mismatch crash in Spark while merging Parquet files with inconsistent types. I solved it by overriding the Catalyst Optimizer's default discovery behavior, disabling global schema merging in the session, and enforcing a manual casting strategy in the transformation layer. I then documented the entire meta-explanation in the project's technical docs to prevent future regressions.
