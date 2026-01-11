@@ -50,3 +50,17 @@ spark = SparkSessionFactory.get_session() is the *most expensive line of code* i
 * Path Construction: Build your bronze_path string.
 * Metadata Check: Use boto3 (which is very cheap/fast) to check if the files actually exist in S3.
 * The Point of No Return: ONLY NOW do you start the SparkSession.
+
+# Resolving Test Suite Path Mapping (Pytest)
+
+## Problem
+When running `pytest` from the project root, the test runner failed to locate the source code inside the `src/` directory. This resulted in `ModuleNotFoundError: No module named 'src'` (or missing sub-modules like `utils`), because the `src/` folder was not in Python’s search path by default.
+
+## Solution: Pytest Path Mapping
+Instead of using manual `sys.path` inserts or setting temporary shell environment variables, I configured the `pyproject.toml` file to natively map the source directory.
+
+### Configuration Addition
+```toml
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
