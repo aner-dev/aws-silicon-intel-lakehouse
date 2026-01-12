@@ -1,0 +1,38 @@
+# docker-compose.override.yml
+services:
+  localstack:
+    image: docker.io/localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,iam,secretsmanager,lambda,sqs,sns,events,dynamodb
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro"
+      - "./.localstack:/var/lib/localstack"
+
+  spark-master:
+    image: docker.io/apache/spark:3.5.0
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    ports:
+      - "8081:8081" # Web UI
+      - "7077:7077" # Master Port
+
+  spark-worker:
+    image: docker.io/apache/spark:3.5.0
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    depends_on:
+      - spark-master
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1500"

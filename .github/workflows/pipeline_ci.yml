@@ -1,0 +1,54 @@
+name: Pipeline CI (Taxi Lakehouse)
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Static Analysis (Ruff)
+        run: uv run ruff check .
+
+      - name: Unit Tests (Pytest)
+        # Refactor: Run all tests in the folder, don't name one file.
+        run: uv run pytest tests/
+
+  integration-test:
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      # Localstack endpoint for the python scripts to use
+      AWS_ENDPOINT_URL: http://localhost:4566
+      BRONZE_BUCKET: silicon-intel-bronze
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start LocalStack
+        run: |
+          docker run -d --name localstack -p 4566:4566 -p 4510-4559:4510-4559 localstack/localstack
+          timeout 60s bash -c "until curl -s localhost:4566/_localstack/health | grep '\"s3\": \"available\"'; do sleep 2; done"
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install Python dependencies
+        run: uv sync
+
+      - name: Execute Medallion Pipeline
+        run: uv run src/run_pipeline.py

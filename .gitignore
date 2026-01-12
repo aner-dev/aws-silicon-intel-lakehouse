@@ -1,0 +1,56 @@
+# Python / Virtual Envs
+.python-version
+.pytest_cache/
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.uv/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+
+# --- LSP & Typing ---
+# Si ty.toml es solo para tu entorno local:
+ty.toml
+
+# --- Terraform Extra ---
+*.tfvars
+*.tfvars.json
+
+# --- OS / IDE ---
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# --- Astro / Airflow ---
+.astro/
+logs/
+plugins/
+include/
+
+# --- Terraform ---
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+
+# --- LocalStack & Data ---
+data/localstack/
+.localstack/
+.env
+build_final_attempt.log
+docs/prompts.md
+docs/prompt_code.md
+*.tfvars
+*.egg-info/
+.envrc
+debug.log
+core-site.xml
+.pivotal/
+docs/notes/

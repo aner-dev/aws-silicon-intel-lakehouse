@@ -1,0 +1,9 @@
+# Core Data Engineering Stack
+pyspark>=3.5.3
+boto3
+pyiceberg
+structlog
+requests
+
+# Versión flexible para evitar el conflicto con Typer/Airflow
+rich>=12.4.4,<13.0.0
