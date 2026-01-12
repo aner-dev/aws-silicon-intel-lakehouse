@@ -1,53 +1,36 @@
 # --- SETTINGS ---
 TERRAFORM_DIR = ./infra
 
-.PHONY: help setup astro-start ingest ingest-news ingest-taxi \
-        transform transform-news transform-taxi multiply seed
+.PHONY: help setup run test lint clean
 
 help:
-	@echo "Silicon Intel Lakehouse - Development Menu"
-	@echo "  make setup           Build Infrastructure + Start Airflow"
-	@echo "  make ingest          Ingest ALL data"
-	@echo "  make transform       Transform ALL data"
-	@echo "  make seed            Full Data Population (Ingest + Transform)"
+	@echo "NYC Transit Lakehouse - Development Menu"
+	@echo "  make setup    Build Infra + Start Airflow/LocalStack"
+	@echo "  make run      Execute the full Medallion Pipeline (Metadata-driven)"
+	@echo "  make test     Run the Pytest suite"
+	@echo "  make lint     Run Static Analysis (Ruff)"
 
 # --- 1. PLATFORM ---
 setup:
-	@echo "🌌 Starting Astronomer (Airflow + LocalStack)..."
-	astro dev start --verbosity debug
-	@echo "⏳ Waiting for LocalStack API to be ready..."
-	@echo "🏗️  Provisioning AWS Infra via Terraform..."
+	@echo "🌌 Checking Astronomer/LocalStack status..."
+	@if [ "$$(astro dev ps 2>/dev/null | grep -c 'Up')" -ge 1 ]; then \
+		echo "✅ LocalStack is already running."; \
+	else \
+		echo "🚀 Starting Astronomer (LocalStack)..."; \
+		astro dev start; \
+		echo "⏳ Waiting 15s for LocalStack to initialize..."; \
+		sleep 15; \
+	fi
+	@echo "🏗️ Provisioning AWS Infra via Terraform..."
 	cd $(TERRAFORM_DIR) && terraform init && terraform apply -auto-approve
-	@echo "✅ PLATFORM READY."
 
-# --- 2. BRONZE LAYER (Ingestion) ---
-ingest-news:
-	@echo "📥 Ingesting News..."
-	uv run src/extract/bronze_ingestion_news_api.py
+# --- 2. EXECUTION ---
+# This single command now handles everything because your Python code is smart!
+run:
+	uv run src/run_pipeline.py
 
-ingest-taxi:
-	@echo "📥 Ingesting Taxi..."
-	uv run src/extract/bronze_ingestion_taxi.py
+test:
+	uv run pytest tests/
 
-ingest: ingest-news ingest-taxi
-	@echo "✅ Bronze Layer Complete."
-
-# --- 3. SILVER LAYER (Transformation) ---
-transform-news:
-	@echo "💎 Transforming News..."
-	uv run src/transform/silver_transform_pyspark_news_api.py
-
-transform-taxi:
-	@echo "💎 Transforming Taxi..."
-	uv run src/transform/silver_transform_pyspark_taxi.py
-
-transform: transform-news transform-taxi
-	@echo "✅ Silver Layer Complete."
-
-# --- 4. MASTER COMMANDS ---
-seed: ingest transform multiply
-	@echo "🔥 LAKEHOUSE FULLY POPULATED."
-
-multiply:
-	@echo "🧪 Running data multiplier..."
-	uv run src/utils/data_multiplier.py
+lint:
+	uv run ruff check .
