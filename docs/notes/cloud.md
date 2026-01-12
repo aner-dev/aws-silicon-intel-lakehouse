@@ -12,3 +12,7 @@ Localstack *non-standard configuration*:
   - LocalStack isn't a real account; it defaults to 000000000000.
   - If Terraform tries to "verify" the account identity against AWS's real servers, the request will fail because you aren't actually connected to the internet-based AWS API.
   - I skip it locally to keep the "engine" running, but knowing that in a professional cloud environment, I should remove that line, so Terraform can map the IAM policies to the correct, unique Account ID.
+# scaling 
+vertical vs horizontal scaling 
+## load balancing 
+  

@@ -1,78 +1,98 @@
-# silver_transform_pyspark_taxi.py
+import os
+import yaml
 from datetime import datetime
 from pyspark.sql import functions as F
 from config.spark_setup import SparkSessionFactory
-from utils.observability import notify_failure
+from utils.observability import notify_failure, log_job_status
 from utils.logging_config import log
 
 
-def transform_taxi_bronze_to_silver(processing_date: str | None = None):
-    if not processing_date:
-        processing_date = datetime.now().strftime("%Y-%m-%d")
+class SilverIngestor:
+    def __init__(self, source_id: str):
+        self.source_id = source_id
+        self.config = self._load_catalog()[source_id]
+        self.spark = SparkSessionFactory.get_session()
+        self.bucket = os.getenv("BRONZE_BUCKET", "silicon-intel-bronze")
 
-    bucket = "silicon-intel-bronze"
-    table_name = "iceberg.silver.nyc_taxi"
-    # 1. PATH TARGETING (Using the Hive standard we set)
-    # Note: We point to the category folder and the specific ingestion date
-    bronze_path = f"s3a://{bucket}/bronze/nyc_taxi/year=*/month=*/*.parquet"  # INCREMENTAL PROCESSING
+    def _load_catalog(self) -> dict:
+        with open("config/catalog.yaml", "r") as f:
+            return yaml.safe_load(f)
 
-    spark = SparkSessionFactory.get_session()
+    def run(self, processing_date: str | None = None):
+        """
+        Executes the Bronze to Silver transformation pipeline.
+        The processing_date is optional; defaults to today's date if None.
+        """
+        job_name = f"{self.source_id}_silver_ingest"
+        proc_date = processing_date or datetime.now().strftime("%Y-%m-%d")
 
-    try:
-        log.info("starting_amazon_silver_transformation", source=bronze_path)
-
-        # 2. READ (Optimized: Only read columns we need to save RAM)
-        df = spark.read.parquet(bronze_path)
-
-        # 3. TRANSFORM: Explicitly cast to resolve the BIGINT vs INT conflict
-        silver_df = (
-            df.filter("trip_distance > 0")
-            .filter("VendorID IS NOT NULL")
-            .select(
-                # We cast everything to the "Silver" standard here.
-                # 'long' handles both INT and BIGINT from the source.
-                F.col("VendorID").cast("long").alias("vendor_id"),
-                F.col("tpep_pickup_datetime").alias("pickup_time"),
-                F.col("tpep_dropoff_datetime").alias("dropoff_time"),
-                F.col("passenger_count").cast("int"),
-                F.col("trip_distance").cast("double"),
-                F.col("total_amount").cast("double"),
-                F.lit(processing_date).alias("ingested_at"),
-            )
-            .distinct()
+        log_job_status(
+            job_id=job_name, status="STARTED", details=f"Source: {self.source_id}"
         )
 
-        # 4. LOAD WITH ICEBERG OPTIMIZATION
-        if not spark.catalog.tableExists(table_name):
-            log.info("creating_new_iceberg_table", table=table_name)
-            # 🟢 PARTITION STRATEGY: Iceberg Hidden Partitioning (Monthly)
-            # This optimizes queries that filter by time without needing extra columns.
-            silver_df.writeTo(table_name).tableProperty(
+        try:
+            source_full_path = f"s3a://{self.bucket}/{self.config['source_path']}"
+            log.info("extracting_bronze_data", path=source_full_path)
+
+            df = self.spark.read.parquet(source_full_path)
+
+            # 1. Dynamic Transformation (Rename & Select)
+            select_expr = [
+                F.col(src).alias(tgt) for tgt, src in self.config["mappings"].items()
+            ]
+
+            silver_df = (
+                df.select(*select_expr)
+                .withColumn("ingested_at", F.lit(proc_date))
+                .distinct()
+            )
+
+            # 2. Schema Evolution & Table Initialization
+            self._ensure_table_exists(silver_df)
+
+            # 3. Idempotent Load (MERGE)
+            self._upsert_to_iceberg(silver_df)
+
+            log_job_status(
+                job_id=job_name,
+                status="SUCCESS",
+                details=f"Target: {self.config['target_table']}",
+            )
+
+        except Exception as e:
+            log.error("silver_ingestion_failed", source=self.source_id, error=str(e))
+            log_job_status(job_id=job_name, status="FAILED", details=str(e))
+            notify_failure(job_name=job_name, error_message=str(e))
+            raise e
+
+    def _ensure_table_exists(self, df):
+        table = self.config["target_table"]
+        partition_col = self.config["partition_by"]
+
+        if not self.spark.catalog.tableExists(table):
+            log.info("initializing_iceberg_table", table=table)
+            df.writeTo(table).tableProperty(
                 "write.format.default", "parquet"
-            ).partitionedBy(F.months("pickup_time")).create()
-        else:
-            log.info("merging_into_existing_table", table=table_name)
-            silver_df.createOrReplaceTempView("source_taxi")
+            ).partitionedBy(F.months(partition_col)).create()
 
-            # 🟢 IDEMPOTENCY: MERGE (Update existing or Insert new)
-            # This ensures that running the same script twice won't create duplicates.
-            spark.sql(f"""
-                MERGE INTO {table_name} t
-                USING source_taxi s
-                ON t.vendor_id = s.vendor_id AND t.pickup_time = s.pickup_time
-                WHEN MATCHED THEN UPDATE SET *
-                WHEN NOT MATCHED THEN INSERT *
-            """)
-            # Refactor: Adding a 'source_taxi.pickup_time > ...' filter here
-            # can help Iceberg "Prune" partitions and go faster.
+    def _upsert_to_iceberg(self, df):
+        table = self.config["target_table"]
+        merge_keys = self.config["merge_keys"]
 
-        log.info("nyc_taxi_silver_success", table=table_name)
+        # Build the dynamic JOIN condition
+        join_condition = " AND ".join([f"t.{k} = s.{k}" for k in merge_keys])
 
-    except Exception as e:
-        log.error("nyc_taxi_silver_failed", error=str(e))
-        notify_failure(job_name="nyc_taxi_silver_transform", error_message=str(e))
-        raise e
+        df.createOrReplaceTempView("source_view")
+
+        self.spark.sql(f"""
+            MERGE INTO {table} t
+            USING source_view s
+            ON {join_condition}
+            WHEN MATCHED THEN UPDATE SET *
+            WHEN NOT MATCHED THEN INSERT *
+        """)
 
 
 if __name__ == "__main__":
-    transform_taxi_bronze_to_silver()
+    # Example execution
+    SilverIngestor(source_id="yellow_taxi").run()

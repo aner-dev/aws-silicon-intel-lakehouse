@@ -1,6 +1,8 @@
 files related: `src/utils/observability.py` `tests/test_observability.py`
 
-# What does the script?
+# What does the script? 
+* **Job State Management | Pipeline Audit Trail**
+
 * This script acts as a 'State Producer'
   * Recording granular execution metadata to DynamoDB and broadcasting failure signals via SNS.
 * In a production environment, this allows the system to have an 'active orchestration', rather than a 'passive logging'. 
@@ -31,4 +33,6 @@ By sending errors to SNS, your ingestion script doesn't need to know how to send
 
 
 
-
+# AWS vs FOSS alternatives 
+the cost of having a developer maintaining the required infrastructure for a FOSS tools oriented workload, and even a hosting service to keep running the server, would be a negative trade-off compared to use aws services
+core factors: maintenance, reliability, integration, scaling
