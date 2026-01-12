@@ -1,16 +1,17 @@
 # --- Storage Module ---
 module "storage" {
-  source = "./modules/storage"
+  source       = "./modules/storage"
+  project_name = var.project_name
 }
 
 # --- Database Module ---
 module "database" {
-  source = "./modules/database"
+  source       = "./modules/database"
+  project_name = var.project_name
 }
 
+# --- Notifications Module ---
 module "notifications" {
-  source = "./modules/notifications"
+  source       = "./modules/notifications"
+  project_name = var.project_name
 }
-
-# --- Secrets (Keep in Root or move to a module if complex) ---
-# (Keep your secrets.tf as is for now if it's small)

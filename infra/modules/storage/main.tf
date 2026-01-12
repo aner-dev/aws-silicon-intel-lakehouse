@@ -1,25 +1,26 @@
-locals {
-  layer_info = {
-    bronze = "Raw immutable data lakehouse layer"
-    silver = "Cleaned and transformed Iceberg tables"
-    gold   = "Business-ready aggregates and star schema"
+terraform {
+  required_version = ">= 1.0.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 4.0.0"
+    }
   }
 }
 
-resource "aws_s3_bucket" "layers" {
-  for_each = local.layer_info
-  bucket   = "silicon-intel-${each.key}"
-
-  tags = {
-    Project     = "Silicon-Intel"
-    Layer       = each.key
-    Description = each.value
-  }
+# --- Rest of your bucket code remains below ---
+resource "aws_s3_bucket" "bronze" {
+  bucket        = "${var.project_name}-bronze"
+  force_destroy = true
 }
 
-resource "aws_s3_bucket_versioning" "gold_versioning" {
-  bucket = aws_s3_bucket.layers["gold"].id
-  versioning_configuration {
-    status = "Enabled"
-  }
+resource "aws_s3_bucket" "silver" {
+  bucket        = "${var.project_name}-silver"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket" "gold" {
+  bucket        = "${var.project_name}-gold"
+  force_destroy = true
 }

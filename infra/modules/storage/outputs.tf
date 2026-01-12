@@ -1,5 +1,11 @@
-output "bucket_ids" {
-  # This exports the map of bucket IDs from the module
-  value = { for k, b in aws_s3_bucket.layers : k => b.id }
+output "bronze_bucket_id" {
+  value = aws_s3_bucket.bronze.id
 }
 
+output "silver_bucket_id" {
+  value = aws_s3_bucket.silver.id
+}
+
+output "gold_bucket_id" {
+  value = aws_s3_bucket.gold.id
+}

@@ -1,6 +1,4 @@
-# Standardize across modules even if unused yet
 variable "project_name" {
-  type    = string
-  default = "silicon-intel"
+  type        = string
+  description = "Project name passed from the root"
 }
-

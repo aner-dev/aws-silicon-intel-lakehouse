@@ -1,4 +1,4 @@
 variable "project_name" {
   type    = string
-  default = "silicon-intel"
+  default = "aws-mobility-elt-pipeline"
 }
