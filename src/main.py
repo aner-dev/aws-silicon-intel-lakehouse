@@ -1,3 +1,4 @@
+# main.py
 import yaml
 import boto3
 from transform.silver_transform_pyspark_taxi import SilverIngestor
@@ -19,7 +20,7 @@ def run_metadata_pipeline():
     for source_id, config in catalog.items():
         # 1. SMART CHECK: Do we need to run Bronze?
         bronze_path = config.get("source_path")
-        if not check_s3_path_exists("silicon-intel-bronze", bronze_path):
+        if not check_s3_path_exists("aws-mobility-elt-pipeline-bronze", bronze_path):
             log.info("bronze_missing_starting_extraction", source=source_id)
             # BronzeExtractor(source_id).run()
         else:

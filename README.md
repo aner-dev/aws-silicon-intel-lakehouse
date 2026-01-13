@@ -1,4 +1,4 @@
-# aws-silicon-intel-lakehouse
+# aws-aws-mobility-elt-pipeline-lakehouse
 
 [![Stack](https://img.shields.io/badge/Stack-AWS_Lakehouse-orange)](https://aws.amazon.com/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue)](LICENSE)

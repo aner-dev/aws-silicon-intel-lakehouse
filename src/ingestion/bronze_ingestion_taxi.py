@@ -1,3 +1,4 @@
+# bronze_ingestion_taxi.py
 import os
 import yaml
 import boto3
@@ -10,10 +11,12 @@ class BronzeIngestor:
     def __init__(self, source_id: str):
         self.source_id = source_id
         self.config = self._load_config()
-        self.s3 = boto3.client(
-            "s3", endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
-        )
-        self.bucket = os.getenv("BRONZE_BUCKET", "silicon-intel-bronze")
+        # In LocalStack/Docker: http://localstack:4566
+        # In AWS: None (Boto3 handles it automatically)
+        endpoint = os.getenv("AWS_ENDPOINT_URL")
+
+        self.s3 = boto3.client("s3", endpoint_url=endpoint)
+        self.bucket = os.getenv("BRONZE_BUCKET")
 
     def _load_config(self) -> dict:
         with open("src/config/catalog.yml", "r") as f:

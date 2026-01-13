@@ -1,4 +1,5 @@
 import boto3
+import uuid
 import json
 import os
 from datetime import datetime
@@ -6,9 +7,11 @@ from utils.logging_config import log
 
 # Unified LocalStack Config
 AWS_ENDPOINT = os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
-AWS_REGION = "us-east-1"
+AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 # This ARN comes from your Terraform outputs
-SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:000000000000:data-pipeline-alerts"
+SNS_TOPIC_ARN = os.getenv(
+    "SNS_TOPIC_ARN", "arn:aws:sns:us-east-1:000000000000:data-pipeline-alerts"
+)
 
 
 def notify_failure(job_name: str, error_message: str):
@@ -38,7 +41,13 @@ def notify_failure(job_name: str, error_message: str):
         log.error("observability_alert_failed", error=str(e))
 
 
-def log_job_status(job_id: str, status: str, details: str):
+def log_job_status(
+    job_name: str,
+    status: str,
+    details: str,
+    execution_id: str | None = None,
+    metrics: dict | None = None,
+):
     """
     Logs the final status of a job to the DynamoDB audit table.
     """
@@ -48,14 +57,22 @@ def log_job_status(job_id: str, status: str, details: str):
         )
         table = dynamo.Table("pipeline_audit")
 
-        table.put_item(
-            Item={
-                "job_id": job_id,
-                "timestamp": datetime.now().isoformat(),
-                "status": status,
-                "details": details,
-            }
-        )
-        log.info("audit_log_updated", job_id=job_id, status=status)
+        # REFACTOR: Now execution_id is defined in the signature above
+        run_id = execution_id or str(uuid.uuid4())
+
+        # Partition Key: The specific job run
+        # Sort Key: The timestamp (allows you to see history of that job)
+        item = {
+            "job_run_id": f"{job_name}#{run_id}",  # Unique Identifier
+            "job_name": job_name,
+            "timestamp": datetime.now().isoformat(),
+            "status": status,
+            "details": details,
+            "metrics": metrics or {},  # JSON map that contains 'rows_processed'
+        }
+
+        table.put_item(Item=item)
+        log.info("audit_log_updated", job_name=job_name, status=status, run_id=run_id)
+
     except Exception as e:
         log.error("audit_log_failed", error=str(e))

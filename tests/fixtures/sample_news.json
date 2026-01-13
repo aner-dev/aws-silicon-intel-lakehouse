@@ -10,7 +10,7 @@
       "author": "Aner Dev",
       "title": "Data Engineering Pipeline: From Bronze to Silver",
       "description": "Testing the Iceberg lakehouse transformation with PySpark 3.5.3 and LocalStack.",
-      "url": "https://github.com/aner-dev/aws-silicon-intel-lakehouse",
+      "url": "https://github.com/aner-dev/aws-aws-mobility-elt-pipeline-lakehouse",
       "urlToImage": "https://example.com/image.jpg",
       "publishedAt": "2026-01-08T15:00:00Z",
       "content": "This is a sample content for the integration test. Spark should parse this and write it into the Iceberg table."
