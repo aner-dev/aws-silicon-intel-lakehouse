@@ -24,3 +24,31 @@ Solution: Pivoted the project infrastructure to use the **official Apache Spark 
 
 # Spark & Schema Mismatch
 I encountered a schema mismatch crash in Spark while merging Parquet files with inconsistent types. I solved it by overriding the Catalyst Optimizer's default discovery behavior, disabling global schema merging in the session, and enforcing a manual casting strategy in the transformation layer. I then documented the entire meta-explanation in the project's technical docs to prevent future regressions.
+
+# Problem Report: Observability Metadata Collision in Terraform
+**Date:** 2026-01-13  
+**Status:** Resolved  
+
+---
+
+### Error
+* **Error:** `Module not installed` 
+* **AttributeError:** Occurred when attempting to access logging attributes within the Lambda consumer.
+
+### Root Cause Analysis (RCA)
+1. **Infrastructure:** Attempted to execute `terraform validate` on a new module structure without re-initializing the backend.
+2. **Data Logic:** There was a disconnect between the **Producer (Spark Job)** and the **Consumer (Lambda)** regarding how metadata (specifically `execution_id`) was being propagated across the pipeline.
+
+---
+
+### Solution 
+> I implemented a **Standardized Lifecycle** for infrastructure changes and a **Context-Aware Logging** pattern.
+
+* **Tooling Fix:** Executed `terraform init` to properly index the new observability module before validation.
+* **Code Refactor:** Refactored the Silver transformation layer to **Inject the `execution_id`** into every log entry and data row. This ensures a 1-to-1 correlation between the Spark execution and the downstream Lambda alerts.
+
+---
+
+### Learning
+* **Terraform Init Hierarchical Relevance:** Any change to the `module` blocks in the root `main.tf` requires a `terraform init` to map the local directory to the state.
+* **Metadata Propagation:** Observability is only as good as the **Correlation ID**. If the ID does not travel seamlessly from the data layer to the application logs, the "audit trail" is broken.

@@ -15,3 +15,10 @@ module "notifications" {
   source       = "./modules/notifications"
   project_name = var.project_name
 }
+# --- Observability Module ---
+module "Observability" {
+  source       = "./modules/observability"
+  project_name = var.project_name
+  environment  = var.environment
+}
+
