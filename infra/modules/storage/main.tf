@@ -1,14 +1,19 @@
-resource "aws_s3_bucket" "bronze" {
-  bucket        = "${var.project_name}-bronze"
-  force_destroy = true
+# define the layers locally or via variables
+variable "layers" {
+  type    = list(string)
+  default = ["bronze", "silver", "gold"]
 }
 
-resource "aws_s3_bucket" "silver" {
-  bucket        = "${var.project_name}-silver"
+resource "aws_s3_bucket" "medallion" {
+  # Create one bucket FOR EACH item in the list
+  for_each = toset(var.layers)
+
+  # each.key will be "bronze", then "silver", etc.
+  bucket        = "${var.bucket_prefix}-${each.key}"
   force_destroy = true
+
+  tags = merge(var.tags, {
+    Layer = each.key
+  })
 }
 
-resource "aws_s3_bucket" "gold" {
-  bucket        = "${var.project_name}-gold"
-  force_destroy = true
-}

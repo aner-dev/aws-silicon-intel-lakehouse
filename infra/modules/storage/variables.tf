@@ -1,4 +1,9 @@
-variable "project_name" {
+variable "bucket_name" {
+  description = "The computed name for the S3 bucket"
   type        = string
-  description = "Project name passed from the root"
+}
+
+variable "tags" {
+  description = "Standard metadata tags"
+  type        = map(string)
 }
