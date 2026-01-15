@@ -8,3 +8,9 @@ output "sqs_queue_url" {
   value       = aws_sqs_queue.spark_alerts_queue.id
 }
 
+output "pipeline_alerts_topic_arn" {
+  description = "ARN of the pipeline alerts SNS topic"
+  value       = aws_sns_topic.pipeline_alerts.arn
+}
+
+

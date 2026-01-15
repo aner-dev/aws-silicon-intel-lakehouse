@@ -1,12 +1,13 @@
 variable "project_name" {
-  description = "The prefix used for all naming conventions (NYC Transit project)"
+  description = "Project identifier"
   type        = string
   default     = "aws-mobility-elt-pipeline-lakehouse"
 }
 
 variable "environment" {
-  type    = string
-  default = "dev"
+  description = "Deployment environment (local, dev, prod)"
+  type        = string
+  default     = "dev"
 }
 
 variable "region" {

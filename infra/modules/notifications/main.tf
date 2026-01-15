@@ -1,5 +1,5 @@
 resource "aws_sns_topic" "pipeline_alerts" {
-  name = "data-pipeline-alerts"
+  name = var.pipeline_alerts_topic_name
 }
 
 resource "aws_sqs_queue" "spark_alerts_queue" {

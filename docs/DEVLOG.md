@@ -64,3 +64,23 @@ Instead of using manual `sys.path` inserts or setting temporary shell environmen
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+```
+# iceberg catalog & aws glue 
+Designed a Lakehouse architecture using Apache Iceberg with a pluggable catalog layer.
+Local development used Iceberg’s native catalog; production deployments target AWS Glue Data Catalog.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

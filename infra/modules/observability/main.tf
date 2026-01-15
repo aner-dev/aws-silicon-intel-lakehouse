@@ -17,24 +17,17 @@ resource "aws_dynamodb_table" "pipeline_audit" {
 
   tags = {
     Environment = "LocalStack"
-    Layer       = "Observability"
+    Layer       = "observability"
   }
 }
 
-# --- 2. SNS: The Alert Entry Point ---
-resource "aws_sns_topic" "pipeline_alerts" {
-  name = "${var.project_name}-${var.environment}-pipeline-alerts"
-
-}
-
-# --- 3. SQS: The Reliable Queue ---
 resource "aws_sqs_queue" "pipeline_alerts_queue" {
   name = "${var.project_name}-${var.environment}-pipeline-alerts-queue"
 }
 
 # --- 4. The Subscription: Fan-out from SNS to SQS ---
 resource "aws_sns_topic_subscription" "sns_to_sqs" {
-  topic_arn = aws_sns_topic.pipeline_alerts.arn
+  topic_arn = var.pipeline_alerts_topic_arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.pipeline_alerts_queue.arn
 }
@@ -53,7 +46,7 @@ resource "aws_sqs_queue_policy" "sns_publish_to_sqs" {
         Resource  = aws_sqs_queue.pipeline_alerts_queue.arn
         Condition = {
           ArnEquals = {
-            "aws:SourceArn" = aws_sns_topic.pipeline_alerts.arn
+            "aws:SourceArn" = var.pipeline_alerts_topic_arn
           }
         }
       }
@@ -61,7 +54,3 @@ resource "aws_sqs_queue_policy" "sns_publish_to_sqs" {
   })
 }
 
-# Output the ARN for .env file
-output "sns_topic_arn" {
-  value = aws_sns_topic.pipeline_alerts.arn
-}

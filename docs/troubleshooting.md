@@ -52,3 +52,17 @@ I encountered a schema mismatch crash in Spark while merging Parquet files with 
 ### Learning
 * **Terraform Init Hierarchical Relevance:** Any change to the `module` blocks in the root `main.tf` requires a `terraform init` to map the local directory to the state.
 * **Metadata Propagation:** Observability is only as good as the **Correlation ID**. If the ID does not travel seamlessly from the data layer to the application logs, the "audit trail" is broken.
+# terraform output vs observability modules (topic_arn)
+traceback error:
+`module.notifications.aws_sns_topic.pipeline_alerts`
+`module.observability.aws_sns_topic.pipeline_alerts`
+Terraform is doing exactly what I asked:
+2 modules
+Each declares an aws_sns_topic
+Therefore: two physical SNS topics
+
+This violates a fundamental IaC principle:
+*One physical resource must be owned by exactly one module.*
+## infra/modules/observability 
+observability module CONSUME sns_topic_arn, it accepts it as *input*.
+It must NOT create SNS topics. 

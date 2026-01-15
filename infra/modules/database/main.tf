@@ -8,11 +8,24 @@ resource "aws_dynamodb_table" "pipeline_audit" {
     type = "S"
   }
 
+  ttl {
+    attribute_name = "ttl_timestamp"
+    enabled        = true
+  }
+
   tags = {
     # Refactor: Use the variable here instead of a hardcoded string
     Project = "var.project_name"
   }
 }
-resource "aws_glue_catalog_database" "silver_db" {
-  name = "silver" # Keeping this simple makes the Spark catalog 'glue_catalog.silver' work
+# Use DynamoDB as the Iceberg Catalog Ref 
+resource "aws_dynamodb_table" "iceberg_catalog" {
+  name         = "iceberg_catalog"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "identifier"
+
+  attribute {
+    name = "identifier"
+    type = "S"
+  }
 }

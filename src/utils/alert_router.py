@@ -3,46 +3,36 @@ from utils.logging_config import log
 
 
 def lambda_handler(event, context):
-    """
-    Consumes structured pipeline metadata from SQS and logs it via structlog.
-    """
-    log.info(
-        "observability_processor_started", records_count=len(event.get("Records", []))
-    )
+    records = event.get("Records", [])
+    # Contextual binding for the start of the batch
+    logger = log.bind(batch_size=len(records))
+    logger.info("observability_processor_triggered")
 
-    for record in event.get("Records", []):
+    for record in records:
         try:
-            # 1. SQS Body contains the SNS Envelope
             sns_envelope = json.loads(record["body"])
+            payload = json.loads(sns_envelope["Message"])
 
-            # 2. SNS 'Message' contains our actual JSON payload from observability.py
-            pipeline_data = json.loads(sns_envelope["Message"])
-
-            job_name = pipeline_data.get("job", "unknown_job")
-            status = pipeline_data.get("status", "UNDEFINED")
-            error = pipeline_data.get("error")
-            timestamp = pipeline_data.get("timestamp")
-
-            # Structured Logging logic
-            if status == "FAILED":
-                log.error(
-                    "pipeline_failure_detected",
-                    job=job_name,
-                    error=error,
-                    job_timestamp=timestamp,
-                )
-            else:
-                log.info(
-                    "pipeline_audit_event",
-                    job=job_name,
-                    status=status,
-                    job_timestamp=timestamp,
-                )
-
-        except Exception as e:
-            log.error(
-                "event_parsing_failed", error=str(e), raw_record=record.get("messageId")
+            # Bind the Execution ID to all logs for this specific record
+            # This ensures every log line from here on includes these IDs automatically
+            it_logger = logger.bind(
+                execution_id=payload.get("execution_id"),
+                job_name=payload.get("job"),
+                status=payload.get("status"),
             )
 
-    return {"statusCode": 200, "body": "Events processed"}
+            if payload.get("status") == "FAILED":
+                it_logger.error(
+                    "pipeline_failure_detected",
+                    error_message=payload.get("error"),
+                    timestamp=payload.get("timestamp"),
+                )
+                # Here is where would trigger a Slack/PagerDuty notification
+            else:
+                it_logger.info("pipeline_milestone_reached")
+
+        except Exception as e:
+            logger.error("payload_decoding_failed", error=str(e))
+
+    return {"statusCode": 200, "body": "Audit processed"}
 

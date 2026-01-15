@@ -12,12 +12,12 @@ module "database" {
 
 # --- Notifications Module ---
 module "notifications" {
-  source       = "./modules/notifications"
-  project_name = var.project_name
-  topic_name   = "data-pipeline-alerts"
+  source                     = "./modules/notifications"
+  project_name               = var.project_name
+  pipeline_alerts_topic_name = "data-pipeline-alerts"
 }
 # --- Observability Module ---
-module "Observability" {
+module "observability" {
   source                    = "./modules/observability"
   project_name              = var.project_name
   environment               = var.environment

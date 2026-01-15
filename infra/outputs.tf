@@ -20,5 +20,6 @@ output "dynamodb_table_name" {
 }
 
 output "alerts_topic_arn" {
-  value = module.notifications.sns_topic_arn
+  description = "ARN of the alerts topic used for pipeline notifications"
+  value       = module.notifications.pipeline_alerts_topic_arn
 }
