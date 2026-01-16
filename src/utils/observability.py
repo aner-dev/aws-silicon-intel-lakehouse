@@ -1,84 +1,96 @@
-from airflow.sdk.timezone import utc
-import boto3
+import os
 import uuid
 import json
-import os
+import boto3
 from datetime import datetime, timedelta
+from airflow.sdk.timezone import utc
 from utils.logging_config import log
 
-# 1. Global Initialization (Faster execution)
-AWS_ENDPOINT = os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566")
-AWS_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
-SNS_TOPIC_ARN = os.getenv(
-    "SNS_TOPIC_ARN", "arn:aws:sns:us-east-1:000000000000:data-pipeline-alerts"
-)
-AUDIT_TABLE_NAME = os.getenv("AUDIT_TABLE_NAME", "pipeline_audit")
 
-# REFACTOR: Initialize clients once in GLOBAL/MODULE SCOPE, avoiding Initialize a boto.client in each function call
-SNS_CLIENT = boto3.client("sns", endpoint_url=AWS_ENDPOINT, region_name=AWS_REGION)
-DYNAMO_RESOURCE = boto3.resource(
-    "dynamodb", endpoint_url=AWS_ENDPOINT, region_name=AWS_REGION
-)
-TABLE = DYNAMO_RESOURCE.Table(AUDIT_TABLE_NAME)
-# using resource instead of client for dynamodb because it store data as "TYPED JSON" -> see docs/notes/boto3
+# TODO:: IAM | Needs permission to write to DynamoDB and publish to SNS.
+# this Python Class works as a State Ledger
+class ObservabilityManager:
+    def __init__(self):
+        # Config Storage (Stored, but not validated yet)
+        self.config = {
+            "endpoint": os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566"),
+            "region": os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
+            "sns_topic": os.getenv("PIPELINE_ALERTS_TOPIC_ARN"),
+            "audit_table": os.getenv("AUDIT_TABLE_NAME", "pipeline_audit"),
+        }
+        self._sns_client = None
+        self._dynamo_table = None
+
+    def _validate_config(self, key: str) -> str:
+        """Internal helper to validate critical config before use."""
+        value = self.config.get(key)
+        if not value:
+            log.critical(
+                f"missing_{key}", message=f"Pipeline cannot function without {key}"
+            )
+            raise EnvironmentError(f"Missing required environment variable for {key}")
+        return str(value)
+
+    @property
+    def sns(self):
+        if self._sns_client is None:
+            self._validate_config("sns_topic")
+            log.info("initializing_sns_client")
+            self._sns_client = boto3.client(
+                "sns",
+                endpoint_url=self.config["endpoint"],
+                region_name=self.config["region"],
+            )
+        return self._sns_client
+
+    @property
+    def table(self):
+        if self._dynamo_table is None:
+            table_name = self._validate_config("audit_table")
+            log.info("initializing_dynamo_resource")
+            resource = boto3.resource(
+                "dynamodb",
+                endpoint_url=self.config["endpoint"],
+                region_name=self.config["region"],
+            )
+            self._dynamo_table = resource.Table(table_name)
+        return self._dynamo_table
+
+    def notify_failure(self, job_name: str, error_message: str):
+        payload = {
+            "job": job_name,
+            "status": "FAILED",
+            "error": error_message,
+            "timestamp": datetime.now(tz=utc).isoformat(),
+        }
+        try:
+            self.sns.publish(
+                TopicArn=self.config["sns_topic"],
+                Message=json.dumps(payload),
+                Subject=f"🚨 Failure: {job_name}",
+            )
+            log.info("alert_published", job=job_name)
+        except Exception as e:
+            log.error("alert_failed", error=str(e), original_job=job_name)
+
+    def log_status(
+        self, job_name: str, status: str, details: str, metrics: dict | None = None
+    ):
+        expiration = datetime.now(tz=utc) + timedelta(days=30)
+        item = {
+            "job_run_id": f"{job_name}#{uuid.uuid4()}",
+            "job_name": job_name,
+            "status": status,
+            "details": details,
+            "metrics": metrics or {},
+            "timestamp": datetime.now(tz=utc).isoformat(),
+            "ttl_timestamp": int(expiration.timestamp()),
+        }
+        try:
+            self.table.put_item(Item=item)
+            log.info("audit_updated", job=job_name, status=status)
+        except Exception as e:
+            log.error("audit_failed", error=str(e))
 
 
-def notify_failure(job_name: str, error_message: str):
-    """Publishes failure to SNS for fan-out (SQS, Email, etc.)"""
-    message_payload = {
-        "job": job_name,
-        "status": "FAILED",
-        "error": error_message,
-        "timestamp": datetime.now(tz=utc).isoformat(),  # UTC for global consistency
-    }
-
-    try:
-        SNS_CLIENT.publish(
-            TopicArn=SNS_TOPIC_ARN,
-            Message=json.dumps(message_payload),
-            Subject=f"🚨 Pipeline Failure: {job_name}",
-        )
-        log.info("observability_alert_published", job=job_name)
-    except Exception as e:
-        # REFACTOR: Log the original error message if the notifier fails
-        log.error("observability_alert_failed", error=str(e), original_job=job_name)
-
-
-def log_job_status(
-    job_name: str,
-    status: str,
-    details: str,
-    execution_id: str | None = None,
-    metrics: dict | None = None,
-):
-    """Logs job audit trail to DynamoDB"""
-    run_id = execution_id or str(uuid.uuid4())
-
-    # Calculate expiration (e.g., 30 days from now)
-    # TTL MUST be in seconds (int)
-    expiration_date = datetime.now(tz=utc) + timedelta(days=30)
-    ttl_value = int(expiration_date.timestamp())
-
-    item = {
-        "job_run_id": f"{job_name}#{run_id}",
-        "job_name": job_name,
-        "status": status,
-        "details": details,
-        "metrics": metrics or {},
-        "timestamp": datetime.now(tz=utc).isoformat(),  # For humans
-        "ttl_timestamp": ttl_value,  # For DynamoDB
-    }
-
-    try:
-        TABLE.put_item(Item=item)
-        log.info("audit_log_updated", job_name=job_name, status=status, run_id=run_id)
-    except Exception as e:
-        log.error("audit_log_failed", error=str(e))
-
-
-def enable_table_ttl(table_name):
-    SNS_CLIENT.update_time_to_live(
-        TableName=table_name,
-        TimeToLiveSpecification={"Enabled": True, "AttributeName": "ttl_timestamp"},
-    )
-    log.info(f"TTL enabled on {table_name} using attribute 'ttl_timestamp'")
+obs = ObservabilityManager()

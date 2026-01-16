@@ -9,6 +9,7 @@ from utils.observability import notify_failure, log_job_status
 from utils.logging_config import log
 
 
+# TODO: IAM role: SilverIngestor Needs permission to read from Bronze, write to Silver (Iceberg/S3), and use Glue/Iceberg Catalog.
 class SilverIngestor:
     def __init__(self, source_id: str):
         self.source_id = source_id

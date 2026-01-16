@@ -9,13 +9,14 @@ dependencies = [
   "great-expectations>=1.10.0",
   "pyiceberg>=0.10.0",
   "pyspark==3.5.3",
-  "pytest>=9.0.2",
-  "pytest-spark>=0.8.0",
   "pyyaml>=6.0.3",
   "requests>=2.32.5",
-  "ruff>=0.14.11",
   "structlog>=25.5.0",
 ]
+
+# development-only tools
+[dependency-groups]
+dev = ["pytest>=9.0.2", "pytest-spark>=0.8.0", "ruff>=0.14.11"]
 
 [build-system]
 requires = ["hatchling"]

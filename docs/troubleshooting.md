@@ -1,3 +1,10 @@
+# Problem: Setup Infrastructure for Observability (CloudWatch)
+Problem: My ObservabilityManager python Class is incomplete.
+Edge case pending handling: If the traceback error is too large for DynamoDB (>400KB), I will need store it in a S3 bucket.
+Solution: Instead of adding a separate S3 bucket for logs, I decide to use CloudWatch, which uses S3 under the hood. 
+Challenges: Define an agnostic IAM module to avoid wasting time creating personalized terraform modules for each addition
+Also avoiding posterior unnecessary refactoring of code at the pipelines scales.
+
 # Troubleshooting: Container Registry & Image Migration
 
 ## Issue: Spark Image Pull Failure

@@ -7,6 +7,7 @@ from typing import Optional
 from utils.logging_config import log
 
 
+# TODO: IAM role: BronzeIngestor needs permission to read from the Internet (requests) and write to the Bronze S3 Bucket.
 class BronzeIngestor:
     def __init__(self, source_id: str):
         self.source_id = source_id

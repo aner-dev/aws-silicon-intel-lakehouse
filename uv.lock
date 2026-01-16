@@ -466,12 +466,16 @@ dependencies = [
     { name = "great-expectations" },
     { name = "pyiceberg" },
     { name = "pyspark" },
-    { name = "pytest" },
-    { name = "pytest-spark" },
     { name = "pyyaml" },
     { name = "requests" },
-    { name = "ruff" },
     { name = "structlog" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-spark" },
+    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -483,12 +487,16 @@ requires-dist = [
     { name = "great-expectations", specifier = ">=1.10.0" },
     { name = "pyiceberg", specifier = ">=0.10.0" },
     { name = "pyspark", specifier = "==3.5.3" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-spark", specifier = ">=0.8.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "requests", specifier = ">=2.32.5" },
-    { name = "ruff", specifier = ">=0.14.11" },
     { name = "structlog", specifier = ">=25.5.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-spark", specifier = ">=0.8.0" },
+    { name = "ruff", specifier = ">=0.14.11" },
 ]
 
 [[package]]
