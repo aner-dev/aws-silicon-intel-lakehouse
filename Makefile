@@ -31,6 +31,9 @@ setup:
 	@echo "🏗️ Provisioning AWS Infra via Terraform..."
 	cd $(TERRAFORM_DIR) && terraform init && terraform apply -auto-approve -input=false 
 
+clean-infra:
+	@echo "🗑️ Destroying all AWS resources..."
+	cd $(TERRAFORM_DIR) && terraform destroy -auto-approve
 # --- 2. EXECUTION ---
 # This single command now handles everything because your Python code is smart!
 run:
