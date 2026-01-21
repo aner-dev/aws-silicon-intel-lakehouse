@@ -1,4 +1,4 @@
-# validate_silver.py
+# silver_validate.py
 
 import sys
 from pyspark.sql import SparkSession

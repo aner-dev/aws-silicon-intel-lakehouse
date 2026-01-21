@@ -1,130 +1,129 @@
-# BronzeIngestor IAM permissions 
-# 1. THE DATA BLOCK (The "Shopping List") | IAM Authorization: Permissions (WHAT)
-data "aws_iam_policy_document" "bronze_ingestor_permissions" {
+# Blueprint Formula: 2 Data Blocks (the logic) + 1 Instance of the Module 
+
+# --- BRONZE LAYER (The Ingestor) ---
+
+data "aws_iam_policy_document" "bronze_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"] # Only Lambda can ingest
+    }
+  }
+}
+
+data "aws_iam_policy_document" "bronze_permissions" {
   statement {
     sid       = "AllowBronzeAccess"
     actions   = ["s3:PutObject", "s3:ListBucket"]
     resources = [module.storage.bronze_bucket_arn, "${module.storage.bronze_bucket_arn}/*"]
   }
   statement {
+    sid       = "WriteAuditLedger"
     actions   = ["dynamodb:PutItem"]
     resources = [module.database.audit_table_arn]
   }
 }
 
-# 2. THE TRUST BLOCK (The "Identity Card") | IAM Authentication: AssumeRole (WHO)
-data "aws_iam_policy_document" "bronze_trust_policy" {
+module "iam_bronze" {
+  source             = "./modules/iam"
+  role_name          = "${local.name_prefix}-bronze-role"
+  assume_role_policy = data.aws_iam_policy_document.bronze_trust.json
+  iam_policy_json    = data.aws_iam_policy_document.bronze_permissions.json
+}
+
+# --- SILVER LAYER (The Transformer / Iceberg) ---
+
+data "aws_iam_policy_document" "silver_trust" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
-      identifiers = ["glue.amazonaws.com"] # Or "lambda.amazonaws.com"
+      identifiers = ["ecs-tasks.amazonaws.com"] # Example: Silver runs in Docker/ECS
     }
   }
 }
 
-# 3. THE FOUNDATION CALL (Using the module)
-module "iam_bronze" {
-  source             = "./modules/iam"
-  role_name          = "bronze-ingestor-role"
-  assume_role_policy = data.aws_iam_policy_document.bronze_trust_policy.json
-  iam_policy_json    = data.aws_iam_policy_document.bronze_ingestor_permissions.json
-}
-# SilverIngestor IAM permissions 
-# 1. THE DATA BLOCK (The "Shopping List") | IAM Authorization: Permissions (WHAT)
-data "aws_iam_policy_document" "silver_ingestor_permissions" {
-  # 1. READ from Bronze 
+data "aws_iam_policy_document" "silver_permissions" {
   statement {
-    sid       = "ReadBronzeSource" # Statement ID 
+    sid       = "ReadBronze"
     actions   = ["s3:GetObject", "s3:ListBucket"]
     resources = [module.storage.bronze_bucket_arn, "${module.storage.bronze_bucket_arn}/*"]
   }
 
-  # 2. WRITE/MANAGE Silver (Iceberg optimized)
   statement {
     sid       = "ManageSilverIceberg"
     actions   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket", "s3:DeleteObject"]
     resources = [module.storage.silver_bucket_arn, "${module.storage.silver_bucket_arn}/*"]
   }
-
-  # 3. OBSERVABILITY
   statement {
-    sid       = "AuditLogs"
-    actions   = ["dynamodb:PutItem", "dynamodb:UpdateItem"]
+    sid       = "UpdateAuditLedger"
+    actions   = ["dynamodb:UpdateItem"]
     resources = [module.database.audit_table_arn]
   }
 }
 
+module "iam_silver" {
+  source             = "./modules/iam"
+  role_name          = "${local.name_prefix}-silver-role"
+  assume_role_policy = data.aws_iam_policy_document.silver_trust.json
+  iam_policy_json    = data.aws_iam_policy_document.silver_permissions.json
+}
 
-# 2. THE TRUST BLOCK (The "Identity Card") | IAM Authentication: AssumeRole (WHO)
-data "aws_iam_policy_document" "silver_trust_policy" {
+
+# =================================================
+# 3. OBSERVABILITY: Monitoring + Alerts
+# =================================================
+
+data "aws_iam_policy_document" "obs_trust" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
-      identifiers = ["glue.amazonaws.com"] # Or "lambda.amazonaws.com"
+      identifiers = ["lambda.amazonaws.com"]
     }
   }
 }
 
-# 3. THE FOUNDATION CALL (Using the module)
-module "iam_silver" {
-  source             = "./modules/iam"
-  role_name          = "silver-ingestor-role"
-  assume_role_policy = data.aws_iam_policy_document.silver_trust_policy.json
-  iam_policy_json    = data.aws_iam_policy_document.silver_ingestor_permissions.json
-}
-
-# 1. THE DATA BLOCK (The "Shopping List")
-data "aws_iam_policy_document" "observability_manager_permissions" {
-
-  # Permission to update the Audit Ledger (DynamoDB)
+data "aws_iam_policy_document" "obs_permissions" {
+  # 1. Full Audit Ledger Access (Matches log_status and internal queries)
   statement {
-    sid = "WriteAuditLedger"
+    sid = "ManageAuditLedger"
     actions = [
-      "dynamodb:PutItem",
+      "dynamodb:PutItem", # Required for obs.log_status()
       "dynamodb:UpdateItem",
-      "dynamodb:GetItem",
+      "dynamodb:GetItem", # Required for internal validation
       "dynamodb:Query"
     ]
     resources = [module.database.audit_table_arn]
   }
 
-  # Permission to send Alerts (SNS)
+  # 2. Alerts (Matches notify_failure)
   statement {
-    sid       = "PublishAlerts"
+    sid       = "PublishPipelineAlerts"
     actions   = ["sns:Publish"]
     resources = [module.notifications.alerts_topic_arn]
   }
 
-  # Permission to write application logs (CloudWatch)
+  # 3. Logging (Required for the 'log' utility in your Python script)
   statement {
-    sid = "WriteLogs"
+    sid = "WriteApplicationLogs"
     actions = [
+      "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents"
     ]
-    resources = ["*"] # Best practice: Narrow this to your Log Group ARN
+    # Restrict to the project's log groups for better security
+    resources = ["arn:aws:logs:*:*:log-group:/aws/lambda/${local.name_prefix}-*"]
   }
 }
 
-# 2. THE TRUST BLOCK (The "Identity Card")
-# I'll reuse the "allow_localstack_services" from before or create a specific one
-data "aws_iam_policy_document" "observability_trust_policy" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["lambda.amazonaws.com", "events.amazonaws.com"]
-    }
-  }
-}
 
-# 3. THE FOUNDATION CALL (Executing the Factory)
+
 module "iam_observability" {
   source             = "./modules/iam"
-  role_name          = "observability-manager"
-  assume_role_policy = data.aws_iam_policy_document.observability_trust_policy.json
-  iam_policy_json    = data.aws_iam_policy_document.observability_manager_permissions.json
+  role_name          = "${local.name_prefix}-obs-manager"
+  assume_role_policy = data.aws_iam_policy_document.obs_trust.json
+  iam_policy_json    = data.aws_iam_policy_document.obs_permissions.json
 }
 

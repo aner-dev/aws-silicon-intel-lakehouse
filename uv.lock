@@ -294,16 +294,31 @@ wheels = [
 ]
 
 [[package]]
+name = "apache-airflow-providers-apache-spark"
+version = "5.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "apache-airflow" },
+    { name = "apache-airflow-providers-common-compat" },
+    { name = "grpcio-status" },
+    { name = "pyspark" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b3/19/1189dba43e7eb1f7a78fa4fa6abec1ecfecb52261ba88d028f9fc4b81ac9/apache_airflow_providers_apache_spark-5.5.0.tar.gz", hash = "sha256:6b2cc5851f0d101ecd17b90ac4451654579aa9900bbcf9fd4ecc9b5db6aa900a", size = 125889, upload-time = "2026-01-17T10:48:14.652Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/41/b91d2d3f32fc3246061cf8794d42b565d8b094718411561acb5109bc924f/apache_airflow_providers_apache_spark-5.5.0-py3-none-any.whl", hash = "sha256:3163b3bee514597912f2f2f5637cca5fda469bee81148f454dc52935e8abe7e2", size = 43938, upload-time = "2026-01-17T10:46:18.031Z" },
+]
+
+[[package]]
 name = "apache-airflow-providers-common-compat"
-version = "1.11.0"
+version = "1.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "apache-airflow" },
     { name = "asgiref" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/db/ce/adcabd043dcc94017a110f99c27e437652a1bbdb3d58fd65baac7960804a/apache_airflow_providers_common_compat-1.11.0.tar.gz", hash = "sha256:614c74c61688f3263e2e936b29f3878f993aea876f6256f2b1726b67633f1dd3", size = 37865, upload-time = "2026-01-02T17:36:11.786Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/4d/799055a57de69089caa8a7ba3fdeb4e795583c06d90cd135f8acfa7f604d/apache_airflow_providers_common_compat-1.12.0.tar.gz", hash = "sha256:32dc86d81330e2755dbb7bf18dcd3bd92bb9e745269eaad82e3e227f9be0097d", size = 38232, upload-time = "2026-01-17T10:48:25.159Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/b7/20e940097ecfe828547298cf4a6be52347761c1e9de21b87312da9571749/apache_airflow_providers_common_compat-1.11.0-py3-none-any.whl", hash = "sha256:17bb5fb214b7ed424402b405126e9dae20706088947e344fbce40f5aae857cac", size = 40930, upload-time = "2026-01-02T17:35:20.731Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/c3/136905c257e8d003e315d0fb8e5910f88b81d4dd169ca9f480b01ff4b4bc/apache_airflow_providers_common_compat-1.12.0-py3-none-any.whl", hash = "sha256:009274ead750ba0a11d94f33a3ee73fa736da4d1766f9dcc9805dc638f3ca33c", size = 41149, upload-time = "2026-01-17T10:46:30.063Z" },
 ]
 
 [[package]]
@@ -461,6 +476,7 @@ source = { editable = "." }
 dependencies = [
     { name = "apache-airflow" },
     { name = "apache-airflow-providers-amazon" },
+    { name = "apache-airflow-providers-apache-spark" },
     { name = "apache-airflow-task-sdk" },
     { name = "boto3" },
     { name = "great-expectations" },
@@ -482,6 +498,7 @@ dev = [
 requires-dist = [
     { name = "apache-airflow", specifier = ">=2.8.0" },
     { name = "apache-airflow-providers-amazon", specifier = ">=9.19.0" },
+    { name = "apache-airflow-providers-apache-spark", specifier = ">=5.5.0" },
     { name = "apache-airflow-task-sdk", specifier = ">=1.1.6" },
     { name = "boto3", specifier = ">=1.42.22" },
     { name = "great-expectations", specifier = ">=1.10.0" },

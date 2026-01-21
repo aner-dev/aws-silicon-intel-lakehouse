@@ -1,19 +1,34 @@
-# define the layers locally or via variables
-variable "layers" {
-  type    = list(string)
-  default = ["bronze", "silver", "gold"]
-}
+resource "aws_s3_bucket" "this" {
+  for_each = var.buckets
 
-resource "aws_s3_bucket" "medallion" {
-  # Create one bucket FOR EACH item in the list
-  for_each = toset(var.layers)
-
-  # each.key will be "bronze", then "silver", etc.
-  bucket        = "${var.bucket_prefix}-${each.key}"
+  bucket        = "${var.project_name}-${each.key}"
   force_destroy = true
 
+  # We use merge() here to combine Global Tags with Specific Tags
   tags = merge(var.tags, {
-    Layer = each.key
+    Name    = "${var.project_name}-${each.key}"
+    Layer   = each.key
+    Iceberg = each.value.is_iceberg ? "true" : "false"
   })
 }
 
+# Apply versioning based on the map value
+resource "aws_s3_bucket_versioning" "this" {
+  for_each = var.buckets
+  bucket   = aws_s3_bucket.this[each.key].id
+
+  versioning_configuration {
+    status = each.value.versioning_enabled ? "Enabled" : "Disabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  for_each = var.buckets
+  bucket   = aws_s3_bucket.this[each.key].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256" # This uses the default S3 key
+    }
+  }
+}

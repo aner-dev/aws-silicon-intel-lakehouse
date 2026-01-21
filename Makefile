@@ -24,8 +24,12 @@ setup:
 		echo "🚀 Starting Astronomer (LocalStack)..."; \
 		astro dev start --verbosity debug; \
 	fi
+	@echo "🥾 Bootstrapping Terraform Backend (S3/DynamoDB)..."
+	@chmod +x $(TERRAFORM_DIR)/bootstrap.sh
+	@./$(TERRAFORM_DIR)/bootstrap.sh
+	@echo "  Boostrap completed!" 
 	@echo "🏗️ Provisioning AWS Infra via Terraform..."
-	cd $(TERRAFORM_DIR) && terraform init && terraform apply -auto-approve
+	cd $(TERRAFORM_DIR) && terraform init && terraform apply -auto-approve -input=false 
 
 # --- 2. EXECUTION ---
 # This single command now handles everything because your Python code is smart!

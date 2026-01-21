@@ -1,14 +1,12 @@
-variable "topic_name" {
-  type = string
+# modules/notifications/variables.tf
+
+variable "alerts_topic_name" {
+  description = "Name of the SNS topic"
+  type        = string
 }
 
 variable "tags" {
-  type = map(string)
-}
-
-# Note: You can keep this if you want a hardcoded default, 
-# but it's better to pass it from the root locals!
-variable "pipeline_alerts_topic_name" {
-  description = "Name of the SNS topic used for pipeline alerts"
-  type        = string
+  description = "Common tags for resources"
+  type        = map(string)
+  default     = {}
 }

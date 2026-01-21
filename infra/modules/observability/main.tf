@@ -1,6 +1,6 @@
 # --- 1. DynamoDB: The Audit Ledger ---
-resource "aws_dynamodb_table" "pipeline_audit" {
-  name         = "${var.project_name}-${var.environment}-pipeline-audit"
+resource "aws_dynamodb_table" "audit" {
+  name         = "${var.project_name}-${var.environment}-audit"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "job_run_id" # e.g., yellow_taxi_silver#uuid
   range_key    = "timestamp"
@@ -22,12 +22,12 @@ resource "aws_dynamodb_table" "pipeline_audit" {
 }
 
 resource "aws_sqs_queue" "pipeline_alerts_queue" {
-  name = "${var.project_name}-${var.environment}-pipeline-alerts-queue"
+  name = "${var.project_name}-${var.environment}-alerts-queue"
 }
 
 # --- 4. The Subscription: Fan-out from SNS to SQS ---
 resource "aws_sns_topic_subscription" "sns_to_sqs" {
-  topic_arn = var.pipeline_alerts_topic_arn
+  topic_arn = var.alerts_topic_arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.pipeline_alerts_queue.arn
 }
@@ -46,7 +46,7 @@ resource "aws_sqs_queue_policy" "sns_publish_to_sqs" {
         Resource  = aws_sqs_queue.pipeline_alerts_queue.arn
         Condition = {
           ArnEquals = {
-            "aws:SourceArn" = var.pipeline_alerts_topic_arn
+            "aws:SourceArn" = var.alerts_topic_arn
           }
         }
       }

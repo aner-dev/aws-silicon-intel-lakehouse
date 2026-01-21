@@ -1,17 +1,19 @@
 locals {
-  # 1. Computed Identity
-  name_prefix = "${var.project_name}-${var.environment}"
+  # 1. Resource Naming 
+  # Purpose: S3 Buckets, IAM Roles, EC2 Names
+  resource_name_prefix = "${var.project_name}-${var.environment}"
 
-  # 2. Contextual Metadata
+  # 2. Secret Taxonomy (Slashed)
+  # Purpose: Secrets Manager, Parameter Store (SSM) & Self-Documenting
+  secret_path_prefix = "/${var.project_name}/${var.environment}"
+
+  # 3. Common Tags
   common_tags = {
-    Environment = var.environment
     Project     = var.project_name
-    Owner       = "Data-Platform-Team"
+    Environment = var.environment
     ManagedBy   = "Terraform"
+    Repository  = "aws-silicon-intel-lakehouse"
+    Team        = "Data-Engineering"
   }
-
-  # 3. Logic Flags 
-  # Using simple booleans is cleaner for the "Contract"
-  is_production      = var.environment == "prod"
-  monitoring_enabled = local.is_production # Directly use the logic
 }
+

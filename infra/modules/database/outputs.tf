@@ -1,3 +1,11 @@
-output "table_name" {
-  value = aws_dynamodb_table.pipeline_audit.name
+output "audit_table_name" {
+  value = aws_dynamodb_table.audit.name
+}
+
+output "audit_table_arn" {
+  value = aws_dynamodb_table.audit.arn
+}
+
+output "iceberg_catalog_arn" {
+  value = aws_dynamodb_table.iceberg_catalog.arn
 }

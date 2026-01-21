@@ -13,6 +13,8 @@ fix: You should construct the Final Name in the root locals and pass the complet
   - A *local* doesn’t change its value once assigned. A variable value can be manipulated via expressions 
     - This makes it easier to assign expression outputs to locals and use that throughout the code instead of using the expression itself at multiple places.
 
+# for_each vs Singleton for s3 buckets creation (infra/modules/storage)
+Used `for_each` with a Map to ensure scalability and enforce uniform security policies across all Lakehouse layers.
 
 
 

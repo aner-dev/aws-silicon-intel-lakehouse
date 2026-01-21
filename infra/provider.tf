@@ -35,7 +35,7 @@ terraform {
 }
 # Public AWS Provider 
 provider "aws" {
-  region                      = "us-east-1"
+  region                      = "var.aws_region"
   access_key                  = "test"
   secret_key                  = "test"
   shared_credentials_files = 
@@ -52,6 +52,10 @@ provider "aws" {
     dynamodb       = "http://localhost:4566"
     sns            = "http://localhost:4566"
     sqs            = "http://localhost:4566"
+    sts            = "http://localhost:4566" # Added for IAM assume role tests
+  }
+  default_tags {
+    tags = local.common_tags # <- Logic flows from locals.tf into the provider
   }
 }
 # Private Postgres Provider 

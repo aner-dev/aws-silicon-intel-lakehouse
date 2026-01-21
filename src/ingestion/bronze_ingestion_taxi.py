@@ -5,6 +5,54 @@ import boto3
 import requests
 from typing import Optional
 from utils.logging_config import log
+from abc import ABC, abstractmethod
+
+# TODO: WEZTERM: 'tmux-session save' in wezterm! avoiding closing all the dev env unnecesarily
+# TODO: creat a NAMING CONVENTION for aws secrets
+# TODO: the bronze & siver Classes should have the ObservabilityManager embedded/implemented
+# NOTE: the IAM provide is implicit, boto.client gets it at background
+# NOTE: However the 'aws secrets' is not, it requires call a boto.client method
+
+
+# Base Contract
+class BaseIngestor(ABC):
+    @abstractmethod
+    def ingest(self, config: dict, dest_key: str):
+        """Every worker must implement this specific method."""
+        pass
+
+
+# S3 Worker
+class S3Worker(BaseIngestor):
+    def __init__(self, s3_client, bucket):
+        self.s3 = s3_client
+        self.bucket = bucket
+
+    def ingest(self, config: dict, dest_key: str):
+        url = config.get("url")
+        log.info("s3_worker_start", url=url)
+        with requests.get(url, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            self.s3.upload_fileobj(r.raw, self.bucket, dest_key)
+
+
+# API worker (Weather Dimensions)
+class APIWorker(BaseIngestor):
+    def __init__(self, s3_client, bucket):
+        self.s3 = s3_client
+        self.bucket = bucket
+
+    def ingest(self, config: dict, dest_key: str):
+        # OpenWeatherAPI needs specific params (lat, lon, appid)
+        api_key = config.get("api_key")
+        endpoint = "https://api.openweathermap.org/data/2.5/weather"
+
+        log.info("api_worker_start", source="openweather")
+        response = requests.get(endpoint, params=config["params"])
+        response.raise_for_status()
+
+        # Uploading raw JSON string to Bronze
+        self.s3.put_object(Bucket=self.bucket, Key=dest_key, Body=response.text)
 
 
 # TODO: IAM role: BronzeIngestor needs permission to read from the Internet (requests) and write to the Bronze S3 Bucket.

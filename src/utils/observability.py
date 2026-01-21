@@ -7,6 +7,7 @@ from airflow.sdk.timezone import utc
 from utils.logging_config import log
 
 
+# TODO: Observer design pattern (refactoring guru)
 # TODO:: IAM | Needs permission to write to DynamoDB and publish to SNS.
 # this Python Class works as a State Ledger
 class ObservabilityManager:
@@ -15,8 +16,8 @@ class ObservabilityManager:
         self.config = {
             "endpoint": os.getenv("AWS_ENDPOINT_URL", "http://localhost:4566"),
             "region": os.getenv("AWS_DEFAULT_REGION", "us-east-1"),
-            "sns_topic": os.getenv("PIPELINE_ALERTS_TOPIC_ARN"),
-            "audit_table": os.getenv("AUDIT_TABLE_NAME", "pipeline_audit"),
+            "sns_topic": os.getenv("ALERTS_TOPIC_ARN"),
+            "audit_table": os.getenv("AUDIT_TABLE_NAME", "audit"),
         }
         self._sns_client = None
         self._dynamo_table = None

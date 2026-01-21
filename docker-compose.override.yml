@@ -6,33 +6,57 @@ services:
       - "4566:4566"
     environment:
       - SERVICES=s3,iam,secretsmanager,lambda,sqs,sns,events,dynamodb
-      - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
+      - HOSTNAME_EXTERNAL=localstack # This helps with "Internal vs External" URL resolution when Spark tries to find the S3 buckets.
     volumes:
       - "${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro"
       - "./.localstack:/var/lib/localstack"
+    networks:
+      - iceberg_net
 
-  spark-master:
-    image: docker.io/apache/spark:3.5.0
-    environment:
-      - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-    ports:
-      - "8081:8081" # Web UI
-      - "7077:7077" # Master Port
-
-  spark-worker:
-    image: docker.io/apache/spark:3.5.0
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=2G
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+  spark-iceberg:
+    image: tabulario/spark-iceberg
+    container_name: spark-iceberg
+    build: spark/
+    networks:
+      iceberg_net:
     depends_on:
-      - spark-master
+      - rest
+      - localstack
+    volumes:
+      - ./warehouse:/home/iceberg/warehouse
+      - ./notebooks:/home/iceberg/notebooks/notebooks
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - SPARK_CONF_spark_hadoop_fs_s3a_endpoint=http://localstack:4566
+      - SPARK_CONF_spark_hadoop_fs_s3a_path_style_access=true
+      - SPARK_CONF_spark_hadoop_fs_s3a_impl=org.apache.hadoop.fs.s3a.S3AFileSystem
+    ports:
+      - 8888:8888
+      - 8081:8080
+      - 10000:10000
+      - 10001:10001
+
+  rest:
+    image: apache/iceberg-rest-fixture
+    container_name: iceberg-rest
+    networks:
+      iceberg_net:
+    ports:
+      - 8181:8181
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://localstack:4566
+      - CATALOG_S3_PATH_STYLE_ACCESS=true
 
 networks:
-  default:
+  iceberg_net:
     driver: bridge
     driver_opts:
       com.docker.network.driver.mtu: "1500"

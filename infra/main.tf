@@ -1,56 +1,44 @@
-# --- Storage Module ---
+# --- 1. STORAGE ---
 module "storage" {
-  source      = "./modules/storage"
-  bucket_name = "${local.name_prefix}-raw-storage" # The module just takes the string
-  tags        = local.common_tags
+  source       = "./modules/storage"
+  project_name = local.name_prefix
+  tags         = local.common_tags
+  buckets = {
+    "bronze" = { versioning_enabled = false, is_iceberg = false },
+    "silver" = { versioning_enabled = true, is_iceberg = true },
+    "gold"   = { versioning_enabled = true, is_iceberg = true }
+  }
 }
 
-# --- Database Module ---
+# --- 2. DATABASE ---
 module "database" {
-  source = "./modules/database"
+  source           = "./modules/database"
+  project_name     = local.name_prefix
+  secret_prefix    = local.secret_path_format # From your locals.tf
+  audit_table_name = "${local.name_prefix}-audit"
+  tags             = local.common_tags
 }
 
-# --- Notifications Module ---
+# --- 3. NOTIFICATIONS ---
 module "notifications" {
   source                     = "./modules/notifications"
-  topic_name                 = "${local.name_prefix}-alerts"
+alerts_topic_name = "${local.name_prefix}-alerts"
   tags                       = local.common_tags
-  pipeline_alerts_topic_name = "data-pipeline-alerts"
-}
-# --- Observability Module ---
-module "observability" {
-  source                    = "./modules/observability"
-  service_name              = "${local.name_prefix}-observability"
-  enabled                   = local.monitoring_enabled
-  tags                      = local.common_tags
-  pipeline_alerts_topic_arn = module.notifications.pipeline_alerts_topic_arn
-
 }
 
-# future version 
-# infra/main.tf
-# All logic is hidden in locals.tf. This file is for ARCHITECTURE.
+# --- 4. IAM (The Missing Factory Calls) ---
+# Calling the IAM factory for each role needed
 
-module "storage" {
-  source      = "./modules/storage"
-  bucket_name = "${local.name_prefix}-raw-storage"
-  tags        = local.common_tags
+module "iam_observability" {
+  source             = "./modules/iam"
+  role_name          = "${local.name_prefix}-observability-role"
+  assume_role_policy = data.aws_iam_policy_document.obs_trust.json
+  iam_policy_json    = data.aws_iam_policy_document.obs_permissions.json
 }
 
-module "database" {
-  source = "./modules/database"
-  tags   = local.common_tags
-}
-
-module "notifications" {
-  source     = "./modules/notifications"
-  topic_name = "${local.name_prefix}-alerts"
-  tags       = local.common_tags
-}
-
-module "observability" {
-  source                    = "./modules/observability"
-  enabled                   = local.monitoring_enabled
-  pipeline_alerts_topic_arn = module.notifications.pipeline_alerts_topic_arn
-  tags                      = local.common_tags
+module "iam_silver_processing" {
+  source             = "./modules/iam"
+  role_name          = "${local.name_prefix}-silver-transformer"
+  assume_role_policy = data.aws_iam_policy_document.silver_trust.json # Define in iam_policies.tf
+  iam_policy_json    = data.aws_iam_policy_document.silver_permissions.json
 }
